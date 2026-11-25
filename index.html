@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Mängdning – StreamBIM</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="app">
+    <header class="head">
+      <div>
+        <h1>Mängdning</h1>
+        <p id="who" class="muted">Ansluter till StreamBIM…</p>
+      </div>
+      <span id="mockBadge" class="badge" hidden>DEMO</span>
+    </header>
+
+    <section class="card" id="classCard" hidden>
+      <div class="cardhead"><strong>Objekttyper</strong><button id="clearClassesBtn" class="link">Rensa</button></div>
+      <div id="classChips" class="chips"></div>
+    </section>
+
+    <section class="card" id="filterCard" hidden>
+      <div class="cardhead"><strong>Filter <span class="muted small">(alla måste stämma)</span></strong><button id="clearFiltersBtn" class="link">Rensa filter</button></div>
+      <div id="filters" class="filters"></div>
+      <button id="addFilterBtn" class="ghost wide">+ Lägg till filter</button>
+      <p id="propsInfo" class="muted small"></p>
+    </section>
+
+    <section class="card" id="optCard" hidden>
+      <div class="row two">
+        <label>Omfång
+          <select id="scopeSel">
+            <option value="model">Hela modellen</option>
+            <option value="picked">Markerade i 3D</option>
+            <option value="layers">Synliga lager</option>
+          </select>
+        </label>
+        <label>Gruppera på
+          <select id="groupSel"></select>
+        </label>
+      </div>
+      <p id="pickedInfo" class="muted small" hidden>
+        <span id="pickedTxt"></span> <button id="clearPickedBtn" class="link">Rensa markering</button>
+      </p>
+      <div class="row buttons">
+        <button id="runBtn" class="primary">Mängda</button>
+        <button id="resetViewBtn" class="ghost">Återställ vy</button>
+      </div>
+      <div id="progress" class="progress" hidden><span class="spinner"></span><span id="progressTxt">Hämtar objekt…</span></div>
+    </section>
+
+    <section class="card" id="resultCard" hidden>
+      <div class="cardhead">
+        <strong id="resultTitle">Resultat</strong>
+        <div class="seg" role="group" aria-label="Visning i 3D">
+          <button id="modeMark" class="on">Markera</button><button id="modeIso">Isolera</button>
+        </div>
+      </div>
+      <p id="warn" class="warn small" hidden></p>
+      <div class="tablewrap">
+        <table id="resultTable">
+          <thead><tr><th id="groupHead">Grupp</th><th class="num">Antal<br><span>st</span></th><th class="num">Längd<br><span>m</span></th><th class="num">Area<br><span>m²</span></th><th class="num">Volym<br><span>m³</span></th></tr></thead>
+          <tbody></tbody>
+          <tfoot></tfoot>
+        </table>
+      </div>
+      <p class="muted small">Tryck på en rad för att visa objekten i modellen.</p>
+      <button id="exportBtn" class="primary wide">Exportera till Excel</button>
+    </section>
+
+    <p id="error" class="error" hidden></p>
+  </main>
+
+  <script src="lib/streambim-widget-api.min.js"></script>
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="mock.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
