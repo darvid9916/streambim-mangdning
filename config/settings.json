@@ -1,130 +1,46 @@
 {
   "_info": "Inställningar för mängdningswidgeten. Widgeten läser bara, den skriver aldrig till modell eller projekt.",
-  "projectNames": {
-    "5364": "Test 1, Sweco"
-  },
+  "debug": true,
+  "projectNames": { "5364": "Test 1, Sweco" },
   "classes": [
-    {
-      "kind": "Wall",
-      "label": "IfcWall"
-    },
-    {
-      "kind": "CurtainWall",
-      "label": "IfcCurtainWall"
-    },
-    {
-      "kind": "Door",
-      "label": "IfcDoor"
-    },
-    {
-      "kind": "Window",
-      "label": "IfcWindow"
-    },
-    {
-      "kind": "Slab",
-      "label": "IfcSlab"
-    },
-    {
-      "kind": "Roof",
-      "label": "IfcRoof"
-    },
-    {
-      "kind": "Beam",
-      "label": "IfcBeam"
-    },
-    {
-      "kind": "Column",
-      "label": "IfcColumn"
-    },
-    {
-      "kind": "Covering",
-      "label": "IfcCovering"
-    },
-    {
-      "kind": "Stair",
-      "label": "IfcStair"
-    },
-    {
-      "kind": "Railing",
-      "label": "IfcRailing"
-    },
-    {
-      "kind": "Space",
-      "label": "IfcSpace"
-    }
+    "Wall", "CurtainWall", "Door", "Window", "Slab", "Roof", "Beam", "Column", "Member", "Plate",
+    "Covering", "Stair", "Railing", "Footing", "Pile", "Space",
+    "DuctSegment", "DuctFitting", "AirTerminal", "PipeSegment", "PipeFitting",
+    "CableCarrierSegment", "CableCarrierFitting", "LightFixture", "Outlet", "JunctionBox",
+    "FlowSegment", "FlowFitting", "FlowTerminal", "BuildingElementProxy", "FurnishingElement"
   ],
+  "excludeKinds": ["OpeningElement", "BuildingStorey", "Building", "Site", "Project", "Annotation", "Grid", "VirtualElement", "SpatialZone", "Zone", "DistributionPort", "Port"],
+  "discipline": {
+    "_info": "Disciplin hämtas i första hand från en egenskap vars värden matchar StreamBIMs lagernamn, sedan från egenskaperna i 'keys', sist från IFC-klass.",
+    "keys": ["Disciplin", "Discipline", "@layer", "Layer", "Model", "Modell", "File Name", "Filename", "Delmodell"],
+    "byClass": {
+      "Arkitekt": ["Wall", "CurtainWall", "Door", "Window", "Covering", "Stair", "Railing", "Roof", "Space", "FurnishingElement"],
+      "Konstruktion": ["Beam", "Column", "Member", "Plate", "Footing", "Pile", "Slab"],
+      "Ventilation": ["DuctSegment", "DuctFitting", "AirTerminal"],
+      "VS": ["PipeSegment", "PipeFitting"],
+      "El": ["CableCarrierSegment", "CableCarrierFitting", "LightFixture", "Outlet", "JunctionBox"]
+    }
+  },
   "search": {
     "kindKey": "@kind",
-    "equalsOperator": null,
     "pageSize": 500,
-    "maxObjects": 20000,
-    "sampleSize": 200
+    "maxObjects": 20000
   },
   "quantities": {
     "psetPattern": "^(BaseQuantities|Qto_.*)$",
     "default": {
-      "length": [
-        "Length",
-        "NetLength",
-        "GrossLength"
-      ],
-      "area": [
-        "NetSideArea",
-        "NetArea",
-        "NetFootprintArea",
-        "GrossSideArea",
-        "GrossArea",
-        "GrossFootprintArea",
-        "Area"
-      ],
-      "volume": [
-        "NetVolume",
-        "GrossVolume",
-        "Volume"
-      ]
+      "length": ["Length", "NetLength", "GrossLength"],
+      "area": ["NetSideArea", "NetArea", "NetFootprintArea", "GrossSideArea", "GrossArea", "GrossFootprintArea", "Area"],
+      "volume": ["NetVolume", "GrossVolume", "Volume"]
     },
     "byClass": {
-      "Slab": {
-        "area": [
-          "NetArea",
-          "GrossArea"
-        ]
-      },
-      "Door": {
-        "area": [
-          "Area"
-        ]
-      },
-      "Window": {
-        "area": [
-          "Area"
-        ]
-      },
-      "Space": {
-        "area": [
-          "NetFloorArea",
-          "GrossFloorArea"
-        ]
-      }
+      "Slab": { "area": ["NetArea", "GrossArea"] },
+      "Door": { "area": ["Area"] },
+      "Window": { "area": ["Area"] },
+      "Space": { "area": ["NetFloorArea", "GrossFloorArea"] }
     },
-    "scale": {
-      "length": 1,
-      "area": 1,
-      "volume": 1
-    }
+    "scale": { "length": 1, "area": 1, "volume": 1 }
   },
-  "layerPropertyCandidates": [
-    "@layer",
-    "Layer",
-    "Model",
-    "File Name",
-    "Filename"
-  ],
-  "hiddenPropertyPrefixes": [
-    "@",
-    "BaseQuantities~",
-    "Qto_"
-  ],
-  "highlightColor": "2f8fdd",
-  "debug": true
+  "hiddenPropertyPrefixes": ["BaseQuantities~", "Qto_", "GUID", "GlobalId", "System Global Id"],
+  "highlightColor": "2f8fdd"
 }

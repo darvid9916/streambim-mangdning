@@ -31,7 +31,7 @@ button:disabled { opacity: .5; cursor: default; }
 .chip { min-height: 36px; padding: 0 12px; border-radius: 18px; font-size: 13px; font-weight: 500; }
 .chip.on { background: var(--accent); border-color: var(--accent); }
 .filters { display: flex; flex-direction: column; gap: 6px; }
-.frow { display: grid; grid-template-columns: 1fr 1fr 40px; gap: 6px; }
+.frow { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) 40px; gap: 6px; }
 .frow button { min-height: 40px; padding: 0; }
 .progress { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }

@@ -9,7 +9,7 @@
   function add(kind, name, type, material, floor, zone, layer, qto) {
     n++;
     const p = {
-      '@kind': [kind], '@layer': [layer], 'Name': [name], 'GUID': ['MOCK-' + n], 'Type': [type], 'Material': [material],
+      '@kind': ['Ifc' + kind], '@layer': [layer], 'Name': [name], 'GUID': ['MOCK-' + n], 'Type': [type], 'Material': [material],
       'Building Storey': [floor], 'Platsdata~Zon': [zone], 'Platsdata~Byggdel': [type.split(' ')[0]]
     };
     Object.entries(qto || {}).forEach(([k, v]) => { p[k] = [v]; });
@@ -35,10 +35,15 @@
 
   const key = r => r.psetName ? r.psetName + '~' + r.propKey : r.propKey;
   const val = (o, k) => (o.properties[k] || [])[0];
+  // Efterliknar ett strängare API: @kind kräver formatet IfcXxx och operator '='
+  function ruleOk(o, r) {
+    if (r.propKey === '@kind' && r.operator !== '=') return false;
+    return String(val(o, key(r))) === String(r.propValue);
+  }
   function match(o, q) {
     if (q.key) return String(val(o, q.key)) === String(q.value);
     const groups = (q.filter && q.filter.rules) || [];
-    return !groups.length || groups.some(g => g.every(r => String(val(o, key(r))) === String(r.propValue)));
+    return !groups.length || groups.some(g => g.every(r => ruleOk(o, r)));
   }
   const log = (...a) => console.log('[mock StreamBIM]', ...a);
 
@@ -49,13 +54,16 @@
         getUserEmail: async () => 'daniel.arvidsson@sweco.se',
         getProjectId: async () => '5364',
         getBuildingId: async () => '1000',
-        valuesForObjectProperty: async (p) => [...new Set(objs.map(o => val(o, p)).filter(v => v !== undefined))],
+        valuesForObjectProperty: async (p) => { const o = {}; objs.forEach(x => { const v = val(x, p); if (v !== undefined) o[v] = (o[v] || 0) + 1; }); return o; },
         getObjectInfoForSearch: async (q) => {
           const all = objs.filter(o => match(o, q)), pg = q.page || { limit: 1000, skip: 0 };
           await new Promise(r => setTimeout(r, 60));
-          return all.slice(pg.skip, pg.skip + pg.limit);
+          return { data: all.slice(pg.skip, pg.skip + pg.limit) };
         },
-        getLayers: async () => ({ 'A-modell': true, 'K-modell': false }),
+        getLayers: async () => ({ 'A-modell': true, 'K-modell': true }),
+        setLayers: async (m) => { log('setLayers', JSON.stringify(m)); return true; },
+        hideObject: async () => true,
+        showAllObjects: async () => { log('showAllObjects'); return true; },
         applyObjectSearch: async (q) => { const r = objs.filter(o => match(o, q)).map(o => o.guid); log('applyObjectSearch', JSON.stringify(q.filter.rules), '→', r.length); return r; },
         setSearchVisualizationMode: async (m) => { log('mode', m); return true; },
         zoomToSearchResult: async () => true,
