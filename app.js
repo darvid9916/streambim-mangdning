@@ -34,6 +34,40 @@
   }
   const clearError = () => { $('error').hidden = true; };
   const first = v => Array.isArray(v) ? v[0] : v;
+
+  // valuesForObjectProperty: formatet är odokumenterat. Tål lista, {values:[...]}, {värde: antal} m.m.
+  function toValueList(res) {
+    if (Array.isArray(res)) return res.map(v => (v && typeof v === 'object') ? (v.value ?? v.name ?? v.key ?? v.propValue ?? JSON.stringify(v)) : v);
+    if (res && typeof res === 'object') {
+      for (const k of ['values', 'data', 'result', 'results', 'items']) if (Array.isArray(res[k])) return toValueList(res[k]);
+      const vals = Object.values(res);
+      if (vals.length && vals.every(v => typeof v === 'string')) return vals;
+      return Object.keys(res);
+    }
+    if (typeof res === 'string') return res ? [res] : [];
+    return [];
+  }
+  function toObjectList(res) {
+    if (Array.isArray(res)) return res;
+    if (res && typeof res === 'object') {
+      for (const k of ['objects', 'values', 'data', 'result', 'results', 'items']) if (Array.isArray(res[k])) return res[k];
+      return Object.values(res).filter(x => x && typeof x === 'object');
+    }
+    return [];
+  }
+  // Felsökning: sätt "debug": true i config/settings.json för att se StreamBIMs råa svar i panelen
+  function debug(label, data) {
+    if (!S.settings || !S.settings.debug) return;
+    let pre = document.getElementById('debug');
+    if (!pre) {
+      pre = document.createElement('pre'); pre.id = 'debug';
+      pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font-size:11px;background:#111;color:#9fe;padding:8px;border-radius:6px;user-select:text;';
+      document.getElementById('app').appendChild(pre);
+    }
+    let txt; try { txt = JSON.stringify(data); } catch (_) { txt = String(data); }
+    pre.textContent += `${label} (${Array.isArray(data) ? 'array' : typeof data}): ${String(txt).slice(0, 1500)}\n\n`;
+    console.info('[debug]', label, data);
+  }
   const lastSeg = v => (typeof v === 'string' && v.includes('~')) ? v.split('~').pop() : v;
   const splitKey = k => { const i = k.indexOf('~'); return i < 0 ? { pset: null, key: k } : { pset: k.slice(0, i), key: k.slice(i + 1) }; };
   const keyLabel = k => { if (k === '@kind') return 'IFC-klass'; const s = splitKey(k); return s.pset ? `${s.key} (${s.pset})` : s.key; };
@@ -105,7 +139,8 @@
     try {
       for (const kind of kinds) {
         const infos = await S.api.getObjectInfoForSearch({ filter: { rules: [[kindRule(kind)]] }, page: { limit: per, skip: 0 } });
-        (infos || []).forEach(i => Object.entries(i.properties || {}).forEach(([k, v]) => {
+        debug('getObjectInfoForSearch ' + kind + ' (första objektet)', Array.isArray(infos) ? infos[0] : infos);
+        toObjectList(infos).forEach(i => Object.entries(i.properties || {}).forEach(([k, v]) => {
           if (hidden.some(h => k.startsWith(h)) || k === 'GUID' || k === 'GlobalId') return;
           if (v && typeof v === 'object' && !Array.isArray(v)) return;
           keys.add(k);
@@ -157,7 +192,7 @@
   // Värden som faktiskt finns i modellen. Fallback: värden från urvalet.
   async function valuesFor(key) {
     let vals = [];
-    try { vals = (await S.api.valuesForObjectProperty(key)) || []; } catch (_) { vals = []; }
+    try { const raw = await S.api.valuesForObjectProperty(key); debug('valuesForObjectProperty ' + key, raw); vals = toValueList(raw); } catch (e) { debug('valuesForObjectProperty FEL', e); vals = []; }
     vals = vals.map(v => lastSeg(v)).filter(v => v !== undefined && v !== null && String(v) !== '').map(String);
     if (!vals.length && S.sampled[key]) vals = [...S.sampled[key]];
     return [...new Set(vals)].sort((a, b) => a.localeCompare(b, 'sv', { numeric: true }));
@@ -200,7 +235,8 @@
         const rules = [groupRules(kind, filters)];
         for (;;) {
           setProgress(`Hämtar ${kindLabel(kind)}… ${objects.length} objekt hittills`);
-          const page = (await S.api.getObjectInfoForSearch({ filter: { rules }, page: { limit: pageSize, skip } })) || [];
+          const raw = await S.api.getObjectInfoForSearch({ filter: { rules }, page: { limit: pageSize, skip } });
+          const page = toObjectList(raw);
           page.forEach(i => {
             const g = guidOf(i);
             if (g) objects.push({ guid: g, name: nameOf(i), kind, props: i.properties || {}, info: i, q: quantities(i, kind) });
@@ -434,7 +470,7 @@
 
       // Klasser som faktiskt finns i modellen (om API:t svarar), annars hela listan
       let present = [];
-      try { present = ((await api.valuesForObjectProperty(S.settings.search.kindKey)) || []).map(v => String(lastSeg(v))); } catch (_) { present = []; }
+      try { const raw = await api.valuesForObjectProperty(S.settings.search.kindKey); debug('valuesForObjectProperty ' + S.settings.search.kindKey, raw); present = toValueList(raw).map(v => String(lastSeg(v))); } catch (e) { debug('valuesForObjectProperty FEL', e); present = []; }
       const norm = k => String(k).replace(/^Ifc/i, '').toLowerCase();
       if (present.length) {
         const pset = new Set(present.map(norm));
