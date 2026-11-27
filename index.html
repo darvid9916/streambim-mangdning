@@ -2,94 +2,11 @@
 <html lang="sv">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Mängdning – StreamBIM</title>
-  <link rel="stylesheet" href="styles.css?v=20261127e">
+  <title>Filter</title>
+  <script>location.replace('filter/' + location.search + location.hash);</script>
+  <meta http-equiv="refresh" content="0; url=filter/">
 </head>
 <body>
-  <main id="app">
-    <header class="head">
-      <div>
-        <h1>Mängdning</h1>
-        <p id="who" class="muted">Ansluter till StreamBIM…</p>
-      </div>
-      <span id="ver" class="muted small">v20261127e</span>
-      <span id="mockBadge" class="badge" hidden>DEMO</span>
-    </header>
-
-    <div id="progress" class="progress" hidden><span class="spinner"></span><span id="progressTxt">Läser in…</span></div>
-
-    <section class="card" id="discCard" hidden>
-      <div class="cardhead"><strong>1. Disciplin</strong><button id="clearDiscBtn" class="link">Alla</button></div>
-      <div id="discChips" class="chips"></div>
-      <p id="discInfo" class="muted small"></p>
-    </section>
-
-    <section class="card" id="classCard" hidden>
-      <div class="cardhead"><strong>2. Objekttyp</strong><button id="clearClassesBtn" class="link">Rensa</button></div>
-      <div id="classChips" class="chips"></div>
-    </section>
-
-    <section class="card" id="filterCard" hidden>
-      <div class="cardhead"><strong>3. Parametrar <span class="muted small">(alla måste stämma)</span></strong><button id="clearFiltersBtn" class="link">Rensa filter</button></div>
-      <div id="filters" class="filters"></div>
-      <button id="addFilterBtn" class="ghost wide">+ Lägg till filter</button>
-      <p id="filterNote" class="muted small"></p>
-    </section>
-
-    <section class="card" id="optCard" hidden>
-      <div class="row two">
-        <label>Omfång
-          <select id="scopeSel">
-            <option value="all">Hela urvalet</option>
-            <option value="picked">Bara markerade i 3D</option>
-          </select>
-        </label>
-        <label>Gruppera på
-          <select id="groupSel"></select>
-        </label>
-      </div>
-      <p id="pickedInfo" class="muted small" hidden>
-        <span id="pickedTxt"></span> <button id="clearPickedBtn" class="link">Rensa markering</button>
-      </p>
-      <div class="row buttons">
-        <button id="resetViewBtn" class="ghost">Återställ vy</button>
-      </div>
-    </section>
-
-    <p id="hintTxt" class="muted">Välj disciplin och objekttyp för att börja.</p>
-
-    <section class="card" id="bigCard" hidden>
-      <p id="bigTxt" class="small" style="margin:0"></p>
-      <button id="loadAllBtn" class="ghost wide">Läs in alla</button>
-    </section>
-
-    <section class="card" id="resultCard" hidden>
-      <div class="cardhead">
-        <strong id="resultTitle">Resultat</strong>
-        <div class="seg" role="group" aria-label="Visning i 3D">
-          <button id="modeMark" class="on">Markera</button><button id="modeIso">Isolera</button>
-        </div>
-      </div>
-      <p id="warn" class="warn small" hidden></p>
-      <div class="tablewrap">
-        <table id="resultTable">
-          <thead><tr><th id="groupHead">Grupp</th><th class="num">Antal<br><span>st</span></th><th class="num">Längd<br><span>m</span></th><th class="num">Area<br><span>m²</span></th><th class="num">Volym<br><span>m³</span></th></tr></thead>
-          <tbody></tbody>
-          <tfoot></tfoot>
-        </table>
-      </div>
-      <p class="muted small">Tryck på en rad för att visa objekten i modellen.</p>
-      <button id="exportBtn" class="primary wide">Exportera till Excel</button>
-    </section>
-
-    <p id="error" class="error" hidden></p>
-  </main>
-
-  <script src="lib/streambim-widget-api.min.js?v=20261127e"></script>
-  <script src="lib/xlsx.full.min.js?v=20261127e"></script>
-  <script src="mock.js?v=20261127e"></script>
-  <script src="app.js?v=20261127e"></script>
+  <p><a href="filter/">Öppna widgeten</a></p>
 </body>
 </html>

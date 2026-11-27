@@ -1,41 +1,76 @@
-# Mängdning – StreamBIM-widget
+# Filter – widget för StreamBIM
 
-Widgeten tar fram mängder ur modellen direkt i StreamBIM och exporterar dem till Excel.
-Widgeten **läser bara**. Den ändrar aldrig modell, projekt eller egenskaper. Det enda den påverkar är vyn (färg, sökning, dolda objekt och lager), och "Återställ vy" nollställer den.
+Sök, filtrera och mängda direkt i StreamBIM: antal, area, längd och volym per våning, typ eller valfri egenskap, med diagram, sparade vyer och export till Excel. Gränssnittet är på engelska.
 
-## Så fungerar den
+Widgeten är ren HTML och JavaScript utan byggsteg och utan beroenden. Allt körs i webbläsaren mot StreamBIM:s widget-API ([streambim-widget-api](https://github.com/streambim/streambim-widget-api) v3.0.0, som ingår i `vendor/`).
 
-1. **Disciplin** och **2. Objekttyp** visas direkt, med antal, från StreamBIMs räkning per IFC-klass (`valuesForObjectProperty('@kind')`). Inget läses in i det här läget. Disciplin bestäms av IFC-klassen enligt `discipline.byClass` i settings.
-3. **Parametrar.** När en objekttyp är vald hämtas dess GUID:er med `findObjects` och egenskaperna objekt för objekt med `getObjectInfo`.
-   - Har urvalet högst `autoLoad` objekt (3 000) läses allt in direkt. Parametrar och värden kommer då från urvalet, med antal, och varje filter visar bara det som finns kvar efter filtren ovanför.
-   - Har urvalet fler objekt kommer parametrarna från ett stickprov och värdena från hela modellen. När du väljer ett värde snävas urvalet in på servern med `findObjects`, och när det är litet nog läses det in. Med knappen "Läs in alla" läses hela urvalet in (högst `maxLoad`, 30 000).
+## Innehåll
 
-Resultatet uppdateras direkt: antal (st), längd (m), area (m²) och volym (m³) från `BaseQuantities` och `Qto_*`, grupperat på IFC-klass, disciplin eller valfri parameter.
-En rad i tabellen visar objekten i 3D. "Markera" färgar dem och "Isolera" döljer allt annat.
-"Exportera till Excel" skapar `Test_1_Sweco_mängdning_ÅÅÅÅ-MM-DD.xlsx` med en sammanställning och en objektlista.
-
-### Verifierat mot Test 1, Sweco (27 nov)
-- `@kind`-värden är skrivna som `Wall` och `Cable carrier segment`. Widgeten visar dem som `IfcWall` och `IfcCableCarrierSegment`.
-- `getObjectInfoForSearch` med `filter.rules` ger felet `unknown`. `findObjects({ key: '@kind', value })` fungerar.
-
-## Testa lokalt
-
-```bash
-cd streambim-mangdning
-python3 -m http.server 8000
 ```
-Öppna `http://localhost:8000/?mock=1`. Demoläget efterliknar ett strängt API, så det testar också att söksyntaxen provas fram.
+index.html                 skickar vidare till filter/ (så att repots rotadress fungerar)
+filter/index.html          widgeten (sidan som StreamBIM laddar)
+filter/logic.js            villkor → StreamBIM:s sökfilter, värdesökning, sparade vyer
+shared/streambim.js        läser StreamBIM:s dataformat, bläddrar i sökningar
+shared/quantities.js       mängder: area/längd/volym per IFC-typ, gruppering, tabell
+shared/xlsx.js             egen .xlsx-export (ingen extern kod)
+shared/kinds.js            IFC-typer: svenska sökord och engelska namn
+shared/tema.js             ljust tema i helskärm, mörkt i den smala panelen
+vendor/                    streambim-widget-api (MIT)
+*.test.mjs                 tester, körs med node
+```
 
-## Felsökning
+## Driftsättning
 
-`"debug": true` i `config/settings.json` visar en mörk ruta längst ner med StreamBIMs råa svar: vilken söksyntax som fungerade, det första objektet, lagren och disciplinfördelningen. Stäng av felsökningen när widgeten fungerar.
+1. Lägg hela mappen, med strukturen intakt, på en webbplats med HTTPS, till exempel GitHub Pages. Widgeten hänvisar till `../shared/` och `../vendor/`, så mapparna måste ligga bredvid varandra.
+2. Widgetens adress är mappen `filter/`, till exempel `https://<konto>.github.io/<repo>/filter/`.
+3. Lägg upp adressen i projektets widgetlista i StreamBIM, med namnet `Filter`. StreamBIM laddar då sidan i sin vänstra panel.
 
-## Antaganden som är kvar att verifiera
+Inget skickas till någon annan server än StreamBIM. Widgeten sparar två saker i användarens webbläsare (`localStorage`):
+- ett register över projektets egenskapsvärden, som gör att man kan söka på värden; det byggs om efter ett dygn;
+- användarens sparade vyer per projekt.
 
-| # | Antagande | Om det är fel |
-|---|---|---|
-| 1 | `findObjects` fungerar även för andra egenskaper än `@kind`, med samma nyckel som i objektets `properties` (t.ex. `Platsdata~Zon`). Används bara för stora urval. | Filtret ger 0 objekt. Använd "Läs in alla" eller välj en mindre objekttyp först. |
-| 2 | `getObjectInfo` klarar ca 40 parallella anrop. | Inläsningen går långsamt eller fastnar. Sänk `search.batch`. |
-| 3 | Kvantiteter finns i `BaseQuantities`/`Qto_*`, i meter, m² och m³. | Varning om saknade kvantiteter. Justera `quantities.scale`. |
-| 4 | `applyObjectSearch({ key, value })` fungerar för "Isolera". | Gruppen visas bara i färg. |
-| 5 | Widgetrutan tillåter nedladdning. | Inget händer vid export. Det måste StreamBIM ändra. |
+## Så används den
+
+- **Sök** på värde, egenskap, typ eller våning, till exempel `GP`, `Rw 38`, `EI30`, `door` eller `Plan 04`. Välj en träff så blir den ett villkor. Värden på samma egenskap räcker var för sig, och villkor på olika egenskaper måste alla stämma.
+- **Klicka på ett objekt** i modellen för att filtrera på dess typ, våning eller något annat värde.
+- **Resultatet** visas direkt i modellen och som nyckeltal. Diagrammet kan visas som Donut, Bars, Columns eller Table, med inställningarna Show, Group by och Max.
+- **Klicka på en del av diagrammet** för att bara se den gruppen, och lägg till den i filtret.
+- **Export to Excel** ger två blad: en sammanfattning, och en rad per objekt med mått.
+- **Color in model** färgar objekten efter Group by, och StreamBIM visar färgförklaringen.
+- **Save view** sparar filtret så att det syns på dashboarden.
+
+## Tester
+
+Kräver Node 22 eller senare:
+
+```
+node filter/logic.test.mjs
+node shared/quantities.test.mjs
+node shared/xlsx.test.mjs
+```
+
+## Bra att veta om StreamBIM:s API
+
+Följande är verifierat mot ett riktigt projekt. Där StreamBIM:s dokumentation inte räckte är det läst ur StreamBIM:s egen app-kod.
+
+- **`getObjectInfoForSearch({ …, fieldUnion: true })`** ger alla egenskaper och mängder per rad, och ett sökhuvud med enheter. Mängderna hämtas på det sättet: ungefär 1 300 objekt per sekund. Med `getObjectInfo` går det ungefär 70 objekt per sekund.
+- **`applyObjectSearch`** tar filtret direkt, alltså `{ rules }`, inte `{ filter }`.
+- **Våning är `Location~Floor by position`.** Den har ett värde per objekt och går att söka och färga på. `Floor Id` kan ge ett objekt flera våningar.
+- **`colorCodeByProperty`:**
+  - den kräver en färdig sökning;
+  - ett nytt anrop med samma egenskap stänger av färgningen;
+  - `colorCodeByProperty({})` tar bort färgningen.
+- **`colorCodeObjects`** med egna färger visas bara som StreamBIM:s gröna markering, så den används inte.
+- **`deHighlightAllObjects`** svarar aldrig och får inte inväntas.
+
+## Antaganden, ej verifierade i StreamBIM:s riktiga widgetpanel
+
+Widgeten är utvecklad mot StreamBIM inbäddat i en testsida som härmar panelen. Testsidan har samma API, samma bredd (308 px) och helskärm. Följande är antaget:
+
+- **Nedladdningar är tillåtna i StreamBIM:s widgetram.** Om Export to Excel inte sparar något finns Copy table kvar.
+- **Panelen blir vit i helskärm.** Det framgår av StreamBIM:s CSS, och widgeten byter då till ljust tema.
+
+## Licenser
+
+- **streambim-widget-api:** MIT (Rendra AS), <https://github.com/streambim/streambim-widget-api>.
+- **Övrig kod:** skriven för det här projektet.
