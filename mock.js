@@ -60,6 +60,10 @@
           await new Promise(r => setTimeout(r, 60));
           return { data: all.slice(pg.skip, pg.skip + pg.limit) };
         },
+        findObjects: async (q) => objs.filter(o => String(val(o, q.key)) === String(q.value)).slice(0, q.limit || 100).map(o => o.guid),
+        getObjectInfo: async (g) => objs.find(o => o.guid === g),
+        quickSearch: async (t) => ({ hits: [] }),
+        makeApiRequest: async () => '{"searchId":"mock"}',
         getLayers: async () => ({ 'A-modell': true, 'K-modell': true }),
         setLayers: async (m) => { log('setLayers', JSON.stringify(m)); return true; },
         hideObject: async () => true,

@@ -67,7 +67,13 @@
     if (!pre) {
       pre = document.createElement('pre'); pre.id = 'debug';
       pre.style.cssText = 'white-space:pre-wrap;word-break:break-all;font-size:11px;background:#111;color:#9fe;padding:8px;border-radius:6px;user-select:text;';
-      document.getElementById('app').appendChild(pre);
+      const btn = document.createElement('button'); btn.textContent = 'Kopiera felsökning'; btn.className = 'ghost wide';
+      btn.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(pre.textContent); btn.textContent = 'Kopierat!'; }
+        catch (_) { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); btn.textContent = 'Markerat – tryck Ctrl+C'; }
+        setTimeout(() => { btn.textContent = 'Kopiera felsökning'; }, 2500);
+      });
+      document.getElementById('app').append(btn, pre);
     }
     let txt; try { txt = JSON.stringify(data); } catch (_) { txt = String(data); }
     pre.textContent += `${label} (${Array.isArray(data) ? 'array' : typeof data}): ${String(txt).slice(0, 1500)}\n\n`;
@@ -143,7 +149,7 @@
       { name: 'IfcXxx', f: k => 'Ifc' + canon(k) },
       { name: 'IFCXXX', f: k => ('IFC' + canon(k)).toUpperCase() }
     ];
-    const tried = [];
+    const tried = [], errs = [];
     for (const k of kinds.slice(0, 4)) {
       const seen = new Set();
       for (const vf of vfs) {
@@ -151,15 +157,78 @@
         for (const op of [null, '=']) for (const bid of bids) {
           S.variant = { vf: vf.f, op, bid, name: vf.name };
           let res = [];
-          try { res = toObjectList(await S.api.getObjectInfoForSearch(kindQuery(k, 3, 0))); } catch (e) { res = []; }
+          try { res = toObjectList(await S.api.getObjectInfoForSearch(kindQuery(k, 3, 0))); } catch (e) { res = []; if (errs.length < 3) errs.push(e); }
           tried.push(`${val} op=${op} bid=${typeof bid}:${res.length}`);
           if (res.length) { debug('Söksyntax hittad', { klass: k, värde: val, operator: op, buildingId: bid, försök: tried.length }); debug('Första objektet (rått)', res[0]); return true; }
         }
       }
     }
+    debug('getObjectInfoForSearch gav inga träffar', { försök: tried, fel: errs });
+
+    // Reserv 1: findObjects / applyObjectSearch ger GUID:er, info hämtas sedan per objekt
+    const k0 = kinds.slice(0, 2);
+    for (const k of k0) {
+      const seen = new Set();
+      for (const vf of vfs) {
+        const val = vf.f(k); if (seen.has(val)) continue; seen.add(val);
+        try {
+          const raw = await S.api.findObjects({ key: S.settings.search.kindKey, value: val, limit: 5 });
+          const g = guidList(raw);
+          tried.push(`findObjects ${val}:${g.length}`);
+          if (g.length) { S.variant = { mode: 'find', vf: vf.f, op: null, bid: S.buildingId, name: 'findObjects ' + vf.name }; debug('Sökväg hittad: findObjects', { klass: k, värde: val, svar: raw }); return true; }
+        } catch (e) { tried.push(`findObjects ${val}: FEL ${JSON.stringify(e)}`); }
+        for (const op of [null, '=']) for (const bid of bids) {
+          S.variant = { mode: 'apply', vf: vf.f, op, bid, name: 'applyObjectSearch ' + vf.name };
+          try {
+            const raw = await S.api.applyObjectSearch(kindQuery(k, 5, 0), true);
+            const g = guidList(raw);
+            tried.push(`applyObjectSearch ${val} op=${op} bid=${typeof bid}:${g.length}`);
+            if (g.length) { await S.api.resetObjectSearch().catch(() => {}); debug('Sökväg hittad: applyObjectSearch', { klass: k, värde: val, operator: op, buildingId: bid, svar: raw }); return true; }
+          } catch (e) { tried.push(`applyObjectSearch ${val}: FEL ${JSON.stringify(e)}`); }
+        }
+      }
+    }
+    S.api.resetObjectSearch().catch(() => {});
+
+    // Diagnos: vad svarar övriga sökvägar?
+    try { debug('quickSearch IfcWall', await S.api.quickSearch('IfcWall')); } catch (e) { debug('quickSearch FEL', e); }
+    try {
+      const raw = await S.api.makeApiRequest({ url: `/pgw/project-${S.projectId}/api/v1/ifc-searches`, method: 'POST',
+        body: { rules: [[{ buildingId: S.buildingId, propKey: S.settings.search.kindKey, propValue: String(kinds[0]) }]] } });
+      debug('REST ifc-searches', raw);
+    } catch (e) { debug('REST ifc-searches FEL', e); }
     S.variant = null;
-    debug('Söksyntax hittades inte', tried);
+    debug('Ingen sökväg fungerade', tried);
     return false;
+  }
+
+  function guidList(res) {
+    if (typeof res === 'string') { try { res = JSON.parse(res); } catch (_) { return res ? [res] : []; } }
+    const arr = Array.isArray(res) ? res : toObjectList(res).length ? toObjectList(res) : (res && typeof res === 'object' ? Object.keys(res) : []);
+    return arr.map(x => (x && typeof x === 'object') ? (x.guid || x.id || x.globalId) : x).filter(Boolean).map(String);
+  }
+
+  // Hämtar en sida objekt för en klass med den sökväg som fungerade
+  async function fetchKind(kind, limit, skip) {
+    const api = S.api, v = S.variant;
+    if (!v.mode) return toObjectList(await api.getObjectInfoForSearch(kindQuery(kind, limit, skip)));
+    S.guidCache = S.guidCache || {};
+    if (!S.guidCache[kind]) {
+      const max = S.settings.search.maxObjects;
+      S.guidCache[kind] = v.mode === 'find'
+        ? guidList(await api.findObjects({ key: S.settings.search.kindKey, value: v.vf(kind), limit: max }))
+        : guidList(await api.applyObjectSearch(kindQuery(kind, max, 0), true));
+    }
+    const slice = S.guidCache[kind].slice(skip, skip + limit), out = [];
+    for (let i = 0; i < slice.length; i += 25) {
+      const part = await Promise.all(slice.slice(i, i + 25).map(g => api.getObjectInfo(g).then(info => {
+        if (info && typeof info === 'object' && !info.guid) info.guid = g;
+        return info;
+      }).catch(() => null)));
+      part.forEach(x => { if (x) out.push(x); });
+      setProgress(`Läser in ${kindLabel(kind)}… ${(S.objects.length + out.length).toLocaleString('sv-SE')} objekt hittills`);
+    }
+    return out;
   }
 
   // ---------- inläsning ----------
@@ -183,7 +252,7 @@
 
       setProgress('Provar söksyntax mot modellen…');
       if (!await findVariant(kinds)) {
-        throw 'Hittade inga objekt i modellen med någon av söksyntaxerna för IFC-klass. Sätt "debug": true i config/settings.json och skicka texten i den mörka rutan.';
+        throw 'Hittade inga objekt i modellen med någon av sökvägarna. Skicka texten i den mörka rutan längst ner (knappen "Kopiera felsökning").';
       }
 
       let truncated = false;
@@ -192,7 +261,7 @@
         for (;;) {
           setProgress(`Läser in ${kindLabel(kind)}… ${S.objects.length.toLocaleString('sv-SE')} objekt hittills`);
           let page = [];
-          try { page = toObjectList(await api.getObjectInfoForSearch(kindQuery(kind, pageSize, skip))); } catch (e) { debug('Sökfel ' + kind, e); page = []; }
+          try { page = await fetchKind(kind, pageSize, skip); } catch (e) { debug('Sökfel ' + kind, e); page = []; }
           page.forEach(i => {
             const f = flatten(i), g = guidOf(i, f);
             if (g) S.objects.push({ guid: g, name: nameOf(i, f), kind: canon(kind), label: kindLabel(kind), props: f, q: quantities(i, kind), disc: '' });
@@ -203,6 +272,8 @@
         }
         if (truncated) break;
       }
+      if (S.variant.mode === 'apply') await api.resetObjectSearch().catch(() => {});
+      S.guidCache = {};
       const seen = new Set();
       S.objects = S.objects.filter(o => !seen.has(o.guid) && seen.add(o.guid));
       S.truncated = truncated;
