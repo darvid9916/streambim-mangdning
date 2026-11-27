@@ -7,7 +7,11 @@ Widgeten är ren HTML och JavaScript utan byggsteg och utan beroenden. Allt kör
 ## Innehåll
 
 ```
-index.html                 skickar vidare till filter/ (så att repots rotadress fungerar)
+index.html                 kopia av filter/index.html med sökvägar från roten, så att
+                           repots rotadress (den gamla Mängdning-adressen i StreamBIM) visar
+                           widgeten direkt. Ingen vidarebefordran: StreamBIM:s anslutning
+                           fastnar om sidan byter adress. Ändras filter/index.html måste
+                           den här kopian göras om (byt ../shared/, ../vendor/ och ./logic.js).
 filter/index.html          widgeten (sidan som StreamBIM laddar)
 filter/logic.js            villkor → StreamBIM:s sökfilter, värdesökning, sparade vyer
 shared/streambim.js        läser StreamBIM:s dataformat, bläddrar i sökningar

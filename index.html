@@ -1,12 +1,952 @@
 <!doctype html>
-<html lang="sv">
+<html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Filter</title>
-  <script>location.replace('filter/' + location.search + location.hash);</script>
-  <meta http-equiv="refresh" content="0; url=filter/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Filter and quantities</title>
+  <style>
+    :root {
+      --fg: #f1f1f1; --muted: #9aa0a6; --line: rgba(255,255,255,.14); --soft: rgba(255,255,255,.06); --card: rgba(255,255,255,.07); --pop: #2b2f34;
+      /* Accent: StreamBIM's orange. Text on an orange fill is dark (contrast ≈ 8:1). */
+      --accent: #f39200; --accent-text: #ffb84d; --on-accent: #1f2226; --accent-tint: rgba(243,146,0,.16); --warn: #ffb224;
+      /* Chart colors without orange (the accent): the dataviz reference palette in an order that passes its validator (dark). */
+      --s1: #3987e5; --s2: #199e70; --s3: #9085e9; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --other: #5f6368;
+    }
+    :root[data-tema=ljus] { --card: #f1f2f4; --pop: #f1f2f4; --soft: rgba(0,0,0,.04); --line: #dcdfe3; --accent-text: #a35400; --accent-tint: rgba(243,146,0,.14);
+      --s1: #2a78d6; --s2: #1baf7a; --s3: #6250d6; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --other: #b4b8bd; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 10px 12px 16px; font: 14px/1.4 system-ui, sans-serif; color: var(--fg); background: transparent; }
+    h2 { font-size: 12px; margin: 16px 0 6px; color: var(--muted); font-weight: 600; }
+    [hidden] { display: none !important; }
+    .muted { color: var(--muted); font-size: 12px; }
+    select, input, textarea { font: inherit; font-size: 14px; color: inherit; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; padding: 5px 6px; width: 100%; min-width: 0; }
+    option { color: #000; }
+    button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+    button:hover { border-color: var(--muted); }
+    button:disabled { opacity: .5; cursor: default; }
+    button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+    button[aria-pressed="true"]:not(.ico) { border-color: var(--accent); color: var(--accent-text); }
+    .link { all: unset; cursor: pointer; color: var(--accent-text); font-size: 12px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+    .actions input { flex: 1; width: auto; }
+    .between { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    #status { min-height: 1.2em; margin: 4px 0 0; }
+    .card { background: var(--card); border-radius: 10px; padding: 10px 12px; margin-top: 10px; }
+
+    /* Search */
+    .search { position: sticky; top: 0; z-index: 2; }
+    .search > svg { position: absolute; left: 10px; top: 11px; color: var(--muted); pointer-events: none; }
+    #q { font-size: 14px; padding: 9px 10px 9px 32px; border-radius: 8px; background: var(--pop); border-color: transparent; }
+    #q:focus { border-color: var(--accent); outline: none; }
+    #results { position: absolute; left: 0; right: 0; margin-top: 4px; border: 1px solid var(--line); border-radius: 8px; max-height: 65vh; overflow: auto; background: var(--pop); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    #results:empty { display: none; }
+    .res-h { font-size: 11px; color: var(--muted); padding: 8px 10px 2px; font-weight: 600; }
+    .res { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 8px; width: 100%; padding: 6px 10px; }
+    .res:hover, .res:focus-visible { background: var(--accent-tint); outline: none; }
+    .res b { font-weight: 600; overflow-wrap: anywhere; }
+    .res small { display: block; color: var(--muted); }
+    .res .n { color: var(--muted); font-variant-numeric: tabular-nums; align-self: center; }
+
+    /* Quick start and toggles */
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .pill { padding: 6px 12px; border-radius: 999px; background: var(--card); border-color: transparent; }
+    .pill:hover { border-color: var(--accent); }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+    .seg button { border: 0; border-radius: 0; padding: 5px 10px; font-size: 12px; }
+    .seg button + button { border-left: 1px solid var(--line); }
+    .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+
+    /* Conditions: chips as in the sketch, comparison and "+ or" inline */
+    #conds { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .cond { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 4px 5px 10px; }
+    .cond-h { font-size: 12px; color: var(--muted); display: flex; gap: 4px; align-items: center; }
+    .cond-h select { all: unset; cursor: pointer; color: var(--accent-text); font-size: 12px; }
+    .cond-h select option { color: #000; }
+    .cond .chips { gap: 4px; flex: 1; }
+    .chip { display: inline-flex; align-items: center; padding: 2px 0 2px 10px; border-radius: 999px; background: var(--accent-tint); border: 1px solid var(--accent); color: var(--accent-text); font-size: 13px; }
+    .chip .x { padding: 0 8px 0 6px; color: inherit; }
+    .cond input { width: 7.5em; padding: 2px 8px; font-size: 12px; border-radius: 999px; border-style: dashed; background: transparent; }
+    .or { font-size: 11px; color: var(--muted); }
+    .x { all: unset; cursor: pointer; padding: 2px 8px; color: var(--muted); }
+    .x:hover { color: var(--fg); }
+
+    /* KPI cards */
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 6px; margin-top: 10px; } /* 308 px panel: 2 per row */
+    .kpi { background: var(--card); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+    .kpi span { display: block; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kpi b { display: block; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* Chart card */
+    .card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .card-top .title { font-weight: 600; overflow-wrap: anywhere; }
+    .types { display: flex; gap: 2px; flex: none; }
+    .ico { width: 28px; height: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; color: var(--muted); }
+    .ico:hover { color: var(--fg); }
+    .ico[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+    .settings { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 4px; font-size: 12px; color: var(--muted); }
+    .settings label { display: inline-flex; align-items: center; gap: 4px; }
+    .settings select { all: unset; cursor: pointer; color: var(--fg); font-size: 12px; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .settings select option { color: #000; }
+    .settings select:focus-visible { outline: 2px solid var(--accent); }
+    .settings label::after { content: '▾'; color: var(--muted); font-size: 10px; }
+
+    /* Donut + legend */
+    .donut { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 6px; }
+    .donut svg { flex: none; }
+    .donut svg circle[data-pick] { cursor: pointer; }
+    .donut svg circle[data-pick]:hover { opacity: .85; }
+    .legend { list-style: none; padding: 0; margin: 0; font-size: 12px; flex: 1; min-width: 150px; }
+    .donut.stack { flex-direction: column; align-items: stretch; } /* long names: legend below, full width */
+    .donut.stack svg { align-self: center; }
+    .legend li { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 6px; align-items: center; padding: 2px 4px; border-radius: 4px; cursor: pointer; }
+    .legend li:hover, .legend li[aria-selected="true"] { background: var(--soft); }
+    .legend li.other { cursor: default; color: var(--muted); }
+    .legend .sw { width: 10px; height: 10px; border-radius: 2px; }
+    .legend li { grid-template-columns: 10px minmax(0, 1fr) auto auto; }
+    .legend .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .hbar .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 auto; }
+    .legend .num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+    .legend .pct { color: var(--muted); font-variant-numeric: tabular-nums; width: 3em; text-align: right; }
+
+    /* Bars (ranked, one hue) and table */
+    .hbars { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin-top: 6px; } /* minmax(0,…): long names must not widen the card */
+    .hbar { cursor: pointer; padding: 2px 4px; border-radius: 4px; font-size: 12px; }
+    .hbar:hover, .hbar[aria-selected="true"] { background: var(--soft); }
+    .hbar .between { flex-wrap: nowrap; }
+    .hbar .between span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; flex: none; }
+    .hbar.other { cursor: default; color: var(--muted); }
+    .bar { height: 8px; background: var(--soft); border-radius: 4px; margin-top: 3px; overflow: hidden; }
+    .bar i { display: block; height: 100%; background: var(--s1); border-radius: 0 4px 4px 0; }
+    .other .bar i { background: var(--other); }
+    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 12px; margin-top: 6px; }
+    th { font-size: 11px; color: var(--muted); font-weight: 600; text-align: right; padding: 2px 4px; }
+    td { padding: 4px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; vertical-align: top; }
+    th:first-child, td:first-child { text-align: left; white-space: normal; width: 100%; }
+    tbody tr.pick { cursor: pointer; }
+    tbody tr.pick:hover, tbody tr[aria-selected="true"] { background: var(--soft); }
+    tbody tr.rest { color: var(--muted); }
+    tfoot td { font-weight: 600; }
+    td .bar { height: 4px; }
+    .lbl { overflow-wrap: anywhere; }
+
+    /* Columns (ordered, one hue) */
+    .cols { display: flex; align-items: stretch; gap: 2px; margin-top: 10px; }
+    .col { flex: 1; min-width: 0; display: flex; flex-direction: column; cursor: pointer; }
+    .col .area { height: 140px; display: flex; flex-direction: column; justify-content: flex-end; border-bottom: 1px solid var(--line); }
+    .compact .col .area { height: 70px; }
+    .col .area i { display: block; background: var(--s1); border-radius: 4px 4px 0 0; min-height: 1px; }
+    .col.other .area i { background: var(--other); }
+    .col:hover .area i, .col[aria-selected="true"] .area i { filter: brightness(1.2); }
+    .col .v { font-size: 10px; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .col .t { font-size: 10px; color: var(--muted); writing-mode: vertical-rl; transform: rotate(180deg); max-height: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 4px auto 0; }
+    .compact .col .t { max-height: 44px; }
+
+    .active { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: var(--accent-tint); font-size: 13px; }
+    .active span { flex: 1; min-width: 8em; }
+    .warn { color: var(--warn); font-size: 12px; margin: 6px 0 0; }
+    textarea { margin-top: 8px; height: 90px; font: 12px ui-monospace, monospace; }
+
+    /* Dashboard */
+    .dash-card .card-top > button:first-child { all: unset; cursor: pointer; font-weight: 600; overflow-wrap: anywhere; }
+    .dash-card .card-top > button:first-child:hover { color: var(--accent-text); }
+    .dash-card .n { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; margin-left: auto; }
+
+    /* Picked object */
+    #picked { margin-top: 12px; border: 1px dashed var(--line); border-radius: 10px; padding: 8px 6px 8px 12px; }
+    #picked details { margin-top: 6px; font-size: 12px; }
+    #picked summary { cursor: pointer; color: var(--muted); }
+    #picked dl { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; margin: 4px 0 0; }
+    #picked dt { color: var(--muted); }
+    #picked dd { margin: 0; }
+  </style>
+  <script src="./shared/tema.js"></script>
 </head>
 <body>
-  <p><a href="filter/">Öppna widgeten</a></p>
+  <div class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Search values, types, floors, properties…" autocomplete="off" aria-label="Search" aria-controls="results">
+    <div id="results" role="listbox" aria-label="Search results"></div>
+  </div>
+  <div id="status" class="muted" role="status" aria-live="polite">Connecting to StreamBIM…</div>
+
+  <!-- Start: dashboard of saved views, quick start -->
+  <section id="home" hidden>
+    <div id="dashBox" hidden>
+      <div class="between" style="margin-top:12px">
+        <h2 style="margin:0">Dashboard</h2>
+        <div class="chips">
+          <button class="link" id="dashRefresh">Refresh</button>
+          <button class="link" id="dashExport">Export all to Excel</button>
+        </div>
+      </div>
+      <div id="dash"></div>
+    </div>
+    <h2>Quick start</h2>
+    <div id="starts" class="chips"></div>
+    <p class="muted">Or click an object in the model to filter on its values. Save a filter as a view to keep it on the dashboard.</p>
+  </section>
+
+  <!-- Filter and result -->
+  <section id="filter" hidden>
+    <div id="conds"></div>
+    <div id="kpis" class="kpis"></div>
+
+    <div class="card" id="chartCard" hidden>
+      <div class="card-top">
+        <span class="title" id="chartTitle"></span>
+        <div class="types" id="displays" role="group" aria-label="Chart type"></div>
+      </div>
+      <div class="settings">
+        <label id="measureBox">Show <select id="measureSel" aria-label="Show"></select></label>
+        <label>Group by <select id="groupSel" aria-label="Group by"></select></label>
+        <label id="maxBox">Max <select id="maxSel" aria-label="Max divisions"></select></label>
+      </div>
+      <input id="groupBy" list="fields" placeholder="Type a property…" aria-label="Group by property" autocomplete="off" hidden style="margin:4px 0">
+      <div id="groups"></div>
+      <button id="measure" hidden style="margin-top:8px"></button>
+    </div>
+
+    <div class="actions">
+      <button id="export" class="primary">Export to Excel</button>
+      <button id="color" aria-pressed="false" title="Colors the objects in the model by the Group by property. StreamBIM picks the colors and shows the legend at the bottom left of the 3D view.">Color in model</button>
+      <button id="save">Save view</button>
+    </div>
+    <div id="saveBox" class="actions" hidden>
+      <input id="saveName" aria-label="View name">
+      <button id="saveOk" class="primary">Save</button>
+    </div>
+    <div class="actions">
+      <div class="seg" role="group" aria-label="Other objects">
+        <button id="fade" aria-pressed="true">Fade others</button><button id="isolate" aria-pressed="false">Show only these</button>
+      </div>
+      <button id="zoom">Zoom to</button>
+      <button id="copy">Copy table</button>
+      <button id="clear">Clear</button>
+    </div>
+    <textarea id="copyFallback" hidden readonly aria-label="Table to copy"></textarea>
+  </section>
+
+  <div id="picked" hidden></div>
+  <p class="muted" id="indexStatus"></p>
+  <datalist id="fields"></datalist>
+
+  <script src="./vendor/streambim-widget-api.min.js"></script>
+  <script type="module">
+    import { searchRows } from './shared/streambim.js';
+    import { prepareRows, summarize, toTSV, KINDS, MISSING, UNKNOWN_FLOOR } from './shared/quantities.js';
+    import { FIELDS, fieldOf, labelOf, OPS, addCond, buildFilter, and, searchValues, toView, fromView, viewName, fold } from './filter/logic.js';
+    import { KIND, plural } from './shared/kinds.js';
+    import { xlsx } from './shared/xlsx.js';
+
+    const SORT = { field: 'Name', descending: false };
+    const MAX_GROUPS = 40;       // values counted per split when objects aren't fetched (one search each)
+    const AUTO_ROWS = 5000;      // quantities are fetched automatically up to this (≈ 1 300 objects/s)
+    const MAX_MEASURE = 50000;   // ponytail: everything is held in memory (≈ 2 kB/object); split the selection if larger
+    const INDEX_TTL = 24 * 3600e3;
+    const SKIP_GROUPS = new Set(['Geometry']); // internal geometry data, not searchable
+    const MEASURES = ['area', 'length', 'volume'];
+    // Chart types as icons (Tabler outline paths). Donut and bars fold small groups into "Other".
+    const svgIcon = (d) => `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const DISPLAYS = [
+      ['donut', 'Donut', svgIcon('<path d="M10 3.2a9 9 0 1 0 10.8 10.8a1 1 0 0 0 -1 -1h-3.8a4.1 4.1 0 1 1 -5 -5v-4a.9 .9 0 0 0 -1 -.8"/><path d="M15 3.5a9 9 0 0 1 5.5 5.5h-4.5a9 9 0 0 0 -1 -1v-4.5"/>')],
+      ['bars', 'Bars', svgIcon('<path d="M4 6h10M4 12h16M4 18h7"/>')],
+      ['columns', 'Columns', svgIcon('<path d="M3 21h18M6 21v-8M11 21v-14M16 21v-5M20 21v-10"/>')],
+      ['table', 'Table', svgIcon('<path d="M3 5h18v14h-18zM3 10h18M3 15h18M9 5v14"/>')],
+    ];
+    const MAXES = [4, 6, 8, 12, 20, 0]; // 0 = all
+    const DONUT_SLOTS = 6;      // categorical colors --s1…--s6; more parts fold into "Other"
+
+    const $ = (id) => document.getElementById(id);
+    const h = (tag, props = {}, ...kids) => {
+      const e = Object.assign(document.createElement(tag), props);
+      e.append(...kids.filter((k) => k != null && k !== false));
+      return e;
+    };
+    const api = () => StreamBIM.API;
+    const say = (t) => ($('status').textContent = t);
+    const err = (e) => e?.message || e?.detail || e?.code || JSON.stringify(e);
+    const nf = (n) => Number(n).toLocaleString();
+    const n1 = (v) => v.toLocaleString(undefined, { maximumFractionDigits: Math.abs(v) < 10 ? 1 : 0 });
+    const round = (v) => Math.round(v * 1000) / 1000;
+    const store = {
+      get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+      set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* full or blocked */ } },
+    };
+    const count = async (filter) =>
+      Number((await api().getObjectInfoForSearch({ filter, page: { limit: 1, skip: 0 }, sort: SORT }))?.meta?.total ?? 0);
+    const show = (f, v) => (f.key === '@kind' ? plural(v) : v); // value as displayed
+
+    let buildingId, floors = [], kinds = [], projectId = '';
+    let index = { keys: {} };   // value index for free-text search on values (see buildIndex)
+    let conds = [];
+    const FLOOR = FIELDS['Floor Id']; // = Location~Floor by position, see logic.js
+    let groupBy = FLOOR, measure = 'count', display = 'donut', maxDiv = 8;
+    let mode = 'FADED';
+    let colored = null;         // key of the field StreamBIM is coloring by, or null
+    let state = null;           // { filter, total, objs, groups, rest, dims, active, capped }
+    let seq = 0;
+    const floorNames = () => floors.map((f) => f.name);
+
+    // ---------- value index ----------
+    // StreamBIM's quickSearch finds property names, types and objects but not values. So: list every text property
+    // per IFC type (the fieldUnion search header has them), fetch each property's values with counts, keep for a day.
+    // ponytail: a minute or two the first time in large projects (≈ 5 properties/s); search works meanwhile with what's loaded.
+    const indexKey = () => `filter-index:${projectId}:${buildingId}`;
+    async function buildIndex(force = false) {
+      const cached = store.get(indexKey());
+      if (!force && cached && Date.now() - cached.built < INDEX_TTL && cached.done) { index = cached; return showIndexStatus(); }
+      index = { built: Date.now(), done: false, keys: force ? {} : cached?.keys ?? {} };
+      showIndexStatus('Learning the project’s values…');
+      const keys = new Set();
+      await pool(kinds, 4, async (kind) => {
+        const r = await api().getObjectInfoForSearch({ filter: { rules: [[{ buildingId, propKey: '@kind', propValue: kind }]] }, page: { limit: 1, skip: 0 }, sort: SORT, fieldUnion: true }).catch(() => null);
+        for (const c of r?.header ?? []) if (c.pset && c.datatype === 'str' && !SKIP_GROUPS.has(c.pset)) keys.add(c.id);
+      });
+      const todo = [...keys].filter((k) => !index.keys[k]);
+      let done = keys.size - todo.length;
+      await pool(todo, 4, async (key) => {
+        const values = await api().valuesForObjectProperty(key).catch(() => null);
+        // More than 2 000 distinct values are ids and the like – not useful to search.
+        index.keys[key] = values && Object.keys(values).length <= 2000 ? { values } : {};
+        if (++done % 20 === 0) { showIndexStatus(`Learning the project’s values ${Math.round((done / keys.size) * 100)} %…`); store.set(indexKey(), index); }
+      });
+      index.done = true;
+      store.set(indexKey(), index);
+      showIndexStatus();
+    }
+    async function pool(items, n, fn) {
+      let i = 0;
+      await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) await fn(items[i++]); }));
+    }
+    function showIndexStatus(text) {
+      const n = Object.values(index.keys).filter((k) => k.values).length;
+      $('indexStatus').replaceChildren(...[text ?? `Search knows the values of ${n} properties. `,
+        !text && h('button', { className: 'link', textContent: 'Reload', onclick: () => buildIndex(true) })].filter(Boolean));
+      updateFieldList();
+    }
+
+    // ---------- search ----------
+    let searchTimer, searchSeq = 0;
+    const closeResults = () => { ++searchSeq; $('results').replaceChildren(); };
+    $('q').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(search, 200); };
+    $('q').onkeydown = (e) => {
+      if (e.key === 'Escape') { $('q').value = ''; closeResults(); }
+      if (e.key === 'Enter') $('results').querySelector('.res')?.click();
+      if (e.key === 'ArrowDown') { e.preventDefault(); $('results').querySelector('.res')?.focus(); }
+    };
+    $('results').onkeydown = (e) => {
+      const items = [...$('results').querySelectorAll('.res')], i = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); items[i + 1]?.focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); (items[i - 1] ?? $('q')).focus(); }
+      if (e.key === 'Escape') { closeResults(); $('q').focus(); }
+    };
+    document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.search')) closeResults(); });
+
+    async function search() {
+      const text = $('q').value.trim(), lower = text.toLowerCase();
+      const my = ++searchSeq;
+      if (text.length < 2) return $('results').replaceChildren();
+      const section = (title, items) => items.length ? [h('div', { className: 'res-h', textContent: title }), ...items] : [];
+      const item = (main, sub, n, onclick) => h('button', { className: 'res', role: 'option', onclick: () => { $('q').value = ''; closeResults(); $('q').focus(); onclick(); } },
+        h('span', {}, h('b', { textContent: main }), sub && h('small', { textContent: sub })), n != null ? h('span', { className: 'n', textContent: nf(n) }) : h('span'));
+
+      // Immediately: IFC types (English, plural or Swedish), floors and indexed values. Then StreamBIM's quickSearch.
+      const render = (q = {}) => $('results').replaceChildren(
+        ...section('IFC types', kinds.filter((k) => `${k} ${plural(k)} ${KIND[k] ?? ''}`.toLowerCase().includes(lower)).slice(0, 4)
+          .map((k) => item(plural(k), `IFC type: ${k}`, null, () => add(FIELDS['@kind'], '=', k)))),
+        ...section('Floors', floors.filter((f) => f.name.toLowerCase().includes(lower)).slice(0, 4).map((f) => item(f.name, 'Floor', null, () => add(FLOOR, '=', f.name)))),
+        ...section('Values', searchValues(index, text).map((v) => item(v.value, labelOf(fieldOf(v.key)), v.n, () => add(fieldOf(v.key), '=', v.value)))),
+        ...section('Types', [...new Set((q.typeObject ?? []).map((t) => t.name))].slice(0, 5).map((name) => item(name, 'Type name', null, () => add(FIELDS['Type Name'], '=', name)))),
+        ...section('Properties', (q.property ?? []).slice(0, 6).map((p) => { const f = fieldOf(p.name.slice(0, p.name.lastIndexOf('~'))); return item(labelOf(f), 'Property – pick a value', null, () => add(f)); })),
+        ...section('Free text', [item(`Type name contains "${text}"`, null, null, () => add(FIELDS['Type Name'], 'contains', text)),
+          item(`Name contains "${text}"`, null, null, () => add(FIELDS['Name'], 'contains', text))]),
+        ...section('Objects', (q.object ?? []).slice(0, 4).map((o) => item(o.name, `${o.kind} – go to object`, null, () => goTo(o.id)))),
+      );
+      render();
+      try {
+        const q = await api().quickSearch(text);
+        if (my === searchSeq) render(q);
+      } catch { /* index and floors only */ }
+    }
+
+    async function goTo(guid) {
+      api().deHighlightAllObjects(); // never resolves in StreamBIM – must not be awaited
+      await api().highlightObject(guid);
+      await api().gotoObject(guid);
+    }
+
+    // ---------- conditions ----------
+    // Without a value (property picked from search): a new condition where the value is picked from a list.
+    function add(field, op = '=', value) {
+      if (value === undefined) conds = [...conds, { field, op, values: [] }];
+      else conds = addCond(conds, field, op, value);
+      renderConds();
+      if (value === undefined) $('conds').lastElementChild?.querySelector('input')?.focus();
+      apply();
+    }
+    const addValue = (c, v) => { v = v.trim(); if (v && !c.values.includes(v)) { c.values.push(v); renderConds(); apply(); } };
+
+    function renderConds() {
+      $('conds').replaceChildren(...conds.map((c, i) => {
+        const op = h('select', { ariaLabel: `Comparison for ${labelOf(c.field)}`, onchange: () => { c.op = op.value; if (c.op === 'hasValue') c.values = []; renderConds(); apply(); } },
+          ...OPS.map(([v, l]) => h('option', { value: v, textContent: l, selected: v === c.op })));
+        const list = h('datalist', { id: `v${i}` });
+        const more = h('input', { placeholder: c.values.length ? '+ or…' : 'pick a value', autocomplete: 'off', ariaLabel: `Add a value for ${labelOf(c.field)}` });
+        more.setAttribute('list', list.id);
+        more.onfocus = () => fillValues(c.field, list);
+        more.onkeydown = (e) => { if (e.key === 'Enter') addValue(c, more.value); };
+        // Picked from the list (no Enter): exact values only, so half-typed text isn't added.
+        more.oninput = () => { if ([...list.options].some((o) => o.value === more.value)) addValue(c, more.value); };
+        return h('div', { className: 'cond' },
+          h('div', { className: 'cond-h' }, h('span', { textContent: labelOf(c.field) }), op),
+          h('button', { className: 'x', textContent: '✕', title: 'Remove condition', ariaLabel: `Remove condition ${labelOf(c.field)}`, style: 'grid-row: span 2', onclick: () => { conds.splice(i, 1); renderConds(); apply(); } }),
+          c.op !== 'hasValue' && h('div', { className: 'chips' },
+            ...c.values.flatMap((v, j) => [
+              j > 0 && h('span', { className: 'or', textContent: c.op === '!=' ? 'and' : 'or' }),
+              h('span', { className: 'chip', title: v }, show(c.field, v), h('button', { className: 'x', textContent: '✕', ariaLabel: `Remove ${v}`, onclick: () => { c.values.splice(j, 1); renderConds(); apply(); } })),
+            ]),
+            more, list));
+      }));
+      $('home').hidden = conds.length > 0;
+      $('filter').hidden = !conds.length;
+      // StreamBIM cancels a running search when another one starts: reset first, then let the dashboard search.
+      if (!conds.length) clearView().finally(renderHome);
+    }
+
+    // Values with counts in the dropdown, from the index or straight from StreamBIM.
+    async function fillValues(field, list) {
+      if (list.childElementCount) return;
+      let values = index.keys[field.key]?.values;
+      if (field.key === FLOOR.key) values = Object.fromEntries(floors.map((f) => [f.name, '']));
+      else if (field.key === '@kind') values = Object.fromEntries(kinds.map((k) => [k, '']));
+      else if (!values && field.key !== 'Name' && field.key !== 'Type Name') values = await api().valuesForObjectProperty(field.key).catch(() => ({}));
+      list.replaceChildren(...Object.entries(values ?? {}).sort((a, b) => (b[1] || 0) - (a[1] || 0)).slice(0, 300)
+        .map(([v, n]) => h('option', { value: v, label: n ? `${n} pcs` : show(field, v) })));
+    }
+
+    // ---------- analysis (shared by the filter view and the dashboard) ----------
+    // A field locked to a single "is" value gives one row: split by the first free one instead.
+    function freeGroupBy(cs, g) {
+      const fixed = new Set(cs.filter((c) => c.op === '=' && c.values.length === 1).map((c) => c.field.key));
+      return fixed.has(g.key) ? [FLOOR, FIELDS['@kind'], FIELDS['Type Name']].find((f) => !fixed.has(f.key)) ?? g : g;
+    }
+
+    // Objects with every property and quantity, straight from the search (fieldUnion). shared/quantities.js sums.
+    const fetchObjs = async (filter, max) => prepareRows(await searchRows(api(), filter, { max, page: 5000, fieldUnion: true }));
+
+    // With fetched objects everything is counted here, with quantities. Otherwise: count per value, one search each.
+    async function analyze(filter, field, total, objs) {
+      const cond = (v) => (v === MISSING || v === UNKNOWN_FLOOR ? null : { buildingId, ...field.base, operator: '=', propValue: v });
+      if (objs) {
+        const s = summarize(objs, field.group, floorNames());
+        const groups = s.groups.map((g) => ({ label: g, n: s.dims.count.byGroup[g], cond: cond(g) }));
+        return { groups, dims: s.dims, rest: 0, capped: objs.length < total ? objs.length : 0 };
+      }
+      let groups, capped = 0;
+      if (field.key === FLOOR.key) groups = floors.map((f) => ({ label: f.name, cond: cond(f.name) }));
+      else if (field.key === 'Name' || field.key === 'Type Name') {
+        const { rows } = await searchRows(api(), filter, { max: 3000 });
+        const tally = {};
+        for (const r of rows) { const v = r[field.key] || MISSING; tally[v] = (tally[v] ?? 0) + 1; }
+        groups = Object.entries(tally).map(([v, n]) => ({ label: v, n, cond: cond(v) }));
+        if (rows.length < total) capped = rows.length;
+      } else {
+        const values = field.key === '@kind' ? Object.fromEntries(kinds.map((k) => [k, 0])) : index.keys[field.key]?.values ?? await api().valuesForObjectProperty(field.key);
+        groups = Object.entries(values).sort((a, b) => b[1] - a[1]).slice(0, MAX_GROUPS).map(([v]) => ({ label: v, cond: cond(v) }));
+      }
+      await pool(groups.filter((g) => g.n == null), 8, async (g) => (g.n = await count(and(filter, g.cond))));
+      groups = groups.filter((g) => g.n > 0);
+      return { groups, dims: null, rest: capped ? 0 : total - groups.reduce((s, g) => s + g.n, 0), capped };
+    }
+
+    // Value of a group in the chosen measure; measures missing from the data fall back to count.
+    const measureOf = (dims, m) => (m !== 'count' && dims?.[m] ? m : 'count');
+    const valueOf = (g, dims, m) => (m === 'count' ? g.n : dims[m].byGroup[g.label] ?? 0);
+    const unitOf = (dims, m) => (m === 'count' ? 'pcs' : dims[m].unit);
+    const fmt = (v, m) => (m === 'count' ? nf(v) : n1(v));
+    // Floors keep the building's order; everything else largest first, missing last.
+    const sorted = (groups, field, dims, m) => field.key === FLOOR.key ? groups
+      : [...groups].sort((a, b) => !a.cond - !b.cond || valueOf(b, dims, m) - valueOf(a, dims, m));
+
+    // ---------- charts ----------
+    // Donut: total in the middle, legend with value and share, ≤ 6 colored parts + Other.
+    // Bars: ranked, one hue. Columns: one hue, floors in building order. Table: every group with all quantities.
+    function chart({ field, groups, dims, m, kind, max = 8, rest = 0, total, active, onPick, compact = false }) {
+      const unit = unitOf(dims, m);
+      const ordered = field.key === FLOOR.key;
+      const items = sorted(groups, field, dims, m).map((g) => ({ g, label: show(field, g.label), v: valueOf(g, dims, m) }));
+      const limit = (n) => (max ? Math.min(max, n) : n);
+      const pick = (it) => !it.other && it.g?.cond && onPick ? () => onPick(it.g) : null;
+      const sel = (it) => String(!!active && it.g === active);
+      const tip = (it) => `${it.label}: ${fmt(it.v, m)} ${unit}`;
+
+      if (kind === 'donut') {
+        const list = fold(items.filter((i) => i.v > 0), limit(DONUT_SLOTS + 1)).filter((i) => i.v > 0);
+        const sum = list.reduce((a, i) => a + i.v, 0) || 1;
+        const color = (it, i) => (it.other ? 'var(--other)' : `var(--s${i + 1})`);
+        const size = compact ? 96 : 132, R = 46, C = 2 * Math.PI * R, gap = list.length > 1 ? 1.2 : 0;
+        const NS = 'http://www.w3.org/2000/svg';
+        const el = (tag, attrs, ...kids) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); e.append(...kids); return e; };
+        let off = 0;
+        const svg = el('svg', { viewBox: '0 0 120 120', width: size, height: size, role: 'img', 'aria-label': list.map(tip).join(', ') },
+          ...list.map((it, i) => {
+            const len = (it.v / sum) * C;
+            const c = el('circle', { cx: 60, cy: 60, r: R, fill: 'none', style: `stroke:${color(it, i)}`, 'stroke-width': it.g && it.g === active ? 20 : 16,
+              'stroke-dasharray': `${Math.max(len - gap, 0.6)} ${C}`, 'stroke-dashoffset': -off, transform: 'rotate(-90 60 60)' }, el('title', {}, tip(it)));
+            off += len;
+            const p = pick(it);
+            if (p) { c.setAttribute('data-pick', ''); c.addEventListener('click', p); }
+            return c;
+          }),
+          el('text', { x: 60, y: m === 'count' ? 66 : 62, 'text-anchor': 'middle', 'font-size': 17, 'font-weight': 600, style: 'fill:currentColor' }, fmt(sum, m)),
+          m !== 'count' ? el('text', { x: 60, y: 78, 'text-anchor': 'middle', 'font-size': 10, style: 'fill:var(--muted)' }, unit) : '');
+        return h('div', { className: list.some((i) => i.label.length > 16) ? 'donut stack' : 'donut' }, svg,
+          h('ul', { className: 'legend' }, ...list.map((it, i) => h('li', { className: it.other ? 'other' : '', ariaSelected: sel(it), title: tip(it), onclick: pick(it) },
+            h('span', { className: 'sw', style: `background:${color(it, i)}` }), h('span', { className: 'lbl', textContent: it.label }),
+            !compact && h('span', { className: 'num', textContent: fmt(it.v, m) }), h('span', { className: 'pct', textContent: `${Math.round((it.v / sum) * 100)} %` })))));
+      }
+      if (kind === 'bars') {
+        const list = fold(items, compact ? limit(5) : limit(items.length), { ordered });
+        const top = Math.max(...list.map((i) => i.v), 1e-9);
+        return h('div', { className: 'hbars' }, ...list.map((it) => h('div', { className: `hbar${it.other ? ' other' : ''}`, ariaSelected: sel(it), title: tip(it), onclick: pick(it) },
+          h('div', { className: 'between' }, h('span', { className: 'lbl', textContent: it.label }), h('span', { textContent: `${fmt(it.v, m)} ${unit}` })),
+          h('div', { className: 'bar' }, h('i', { style: `width:${(it.v / top) * 100}%` })))));
+      }
+      if (kind === 'columns') {
+        const list = fold(items, compact ? limit(12) : limit(items.length), { ordered });
+        const top = Math.max(...list.map((i) => i.v), 1e-9);
+        return h('div', { className: `cols${compact ? ' compact' : ''}`, role: 'list' }, ...list.map((it) =>
+          h('div', { className: `col${it.other ? ' other' : ''}`, role: 'listitem', title: tip(it), ariaSelected: sel(it), onclick: pick(it) },
+            !compact && list.length <= 10 && h('div', { className: 'v', textContent: fmt(it.v, m) }),
+            h('div', { className: 'area' }, h('i', { style: `height:${(it.v / top) * 100}%` })),
+            h('div', { className: 't', textContent: it.label }))));
+      }
+      // table: every group, count and all quantities (compact: the 5 largest)
+      const cols = compact ? [] : MEASURES.filter((k) => dims?.[k]);
+      const list = compact ? fold(items, 5) : items;
+      const top = Math.max(...list.map((i) => i.v), 1e-9);
+      return h('table', {},
+        !compact && h('thead', {}, h('tr', {}, h('th', { textContent: field.label }), h('th', { textContent: 'pcs' }), ...cols.map((k) => h('th', { textContent: dims[k].unit })))),
+        h('tbody', {},
+          ...list.map((it) => h('tr', { className: pick(it) ? 'pick' : '', ariaSelected: sel(it), title: pick(it) ? 'Show only these in the model' : '', onclick: pick(it) },
+            h('td', {}, h('div', { className: 'lbl', textContent: it.label }), h('div', { className: 'bar' }, h('i', { style: `width:${(it.v / top) * 100}%` }))),
+            compact ? h('td', { textContent: `${fmt(it.v, m)} ${unit}` }) : h('td', { textContent: nf(it.g.n) }),
+            ...cols.map((k) => h('td', { textContent: n1(dims[k].byGroup[it.g.label] ?? 0) })))),
+          !compact && rest > 0 && h('tr', { className: 'rest' }, h('td', { textContent: 'No value / other' }), h('td', { textContent: nf(rest) }), ...cols.map(() => h('td')))),
+        !compact && groups.length > 1 && h('tfoot', {}, h('tr', {}, h('td', { textContent: 'Total' }), h('td', { textContent: nf(total) }), ...cols.map((k) => h('td', { textContent: n1(dims[k].total) })))));
+    }
+
+    // ---------- home: dashboard and quick start ----------
+    function renderHome() {
+      // Quick start: A/K types first, then the rest, as the project has them.
+      const order = KINDS.map(([k]) => k).filter((k) => kinds.includes(k));
+      $('starts').replaceChildren(...[...order, ...kinds.filter((k) => !order.includes(k))].slice(0, 14)
+        .map((k) => h('button', { className: 'pill', textContent: plural(k), onclick: () => add(FIELDS['@kind'], '=', k) })));
+      renderDash();
+    }
+
+    // ponytail: views are stored in this browser per project. Sharing them with the team needs storage of its own (backend).
+    const viewsKey = () => `filter-views:${projectId}:${buildingId}`;
+    const views = () => store.get(viewsKey()) ?? [];
+    const results = new Map(); // view name → computed result, kept for the session (Refresh recomputes)
+
+    // A saved view against the model as it is now.
+    async function computeView(v) {
+      const r = fromView(v);
+      const filter = buildFilter(r.conds, { buildingId });
+      const field = freeGroupBy(r.conds, r.groupBy ?? FLOOR);
+      const total = filter ? await count(filter) : 0;
+      const needObjs = total > 0 && (total <= AUTO_ROWS || (r.measure !== 'count' && total <= MAX_MEASURE));
+      const objs = needObjs ? await fetchObjs(filter, MAX_MEASURE) : null;
+      const res = total ? await analyze(filter, field, total, objs) : { groups: [], dims: null, rest: 0, capped: 0 };
+      return { ...r, view: v, filter, field, total, objs, ...res, m: measureOf(res.dims, r.measure), at: new Date() };
+    }
+
+    async function renderDash() {
+      const list = views();
+      $('dashBox').hidden = !list.length;
+      const my = ++dashSeq;
+      const cards = list.map((v, i) => {
+        const n = h('span', { className: 'n', textContent: '…' }), sub = h('div', { className: 'muted', textContent: 'Loading…' }), body = h('div', { className: 'body' });
+        const card = h('div', { className: 'card dash-card' },
+          h('div', { className: 'card-top' },
+            h('button', { textContent: v.name, title: 'Open the view', onclick: () => openView(v) }), n,
+            h('button', { className: 'x', textContent: '✕', title: 'Delete the view', ariaLabel: `Delete the view ${v.name}`, onclick: () => deleteView(i) })),
+          sub, body);
+        return { v, n, sub, body, card };
+      });
+      $('dash').replaceChildren(...cards.map((c) => c.card));
+      // One view at a time, so StreamBIM isn't flooded; cached for the session.
+      for (const c of cards) {
+        if (my !== dashSeq) return;
+        try {
+          const r = results.get(c.v.name) ?? await computeView(c.v).catch(() => computeView(c.v)); // one retry: StreamBIM may cancel a search
+          results.set(c.v.name, r);
+          const total = r.m === 'count' ? nf(r.total) : `${n1(r.dims[r.m].total)} ${r.dims[r.m].unit}`;
+          c.n.textContent = total;
+          c.sub.textContent = `${r.m === 'count' ? 'Count' : r.dims[r.m].label} by ${r.field.label.toLowerCase()}${r.m !== 'count' ? ` · ${nf(r.total)} objects` : ''}`;
+          c.body.replaceChildren(chart({ field: r.field, groups: r.groups, dims: r.dims, m: r.m, kind: r.display, max: r.max, total: r.total, compact: true }));
+        } catch (e) { c.n.textContent = '–'; c.sub.textContent = 'Could not compute: ' + err(e); }
+      }
+    }
+    let dashSeq = 0;
+    $('dashRefresh').onclick = () => { results.clear(); renderDash(); };
+    function deleteView(i) {
+      const all = views();
+      results.delete(all[i]?.name);
+      all.splice(i, 1);
+      store.set(viewsKey(), all);
+      renderDash();
+    }
+    function openView(v) {
+      const r = fromView(v);
+      ({ conds, measure, display } = r);
+      maxDiv = r.max;
+      groupBy = r.groupBy ?? FLOOR;
+      renderConds();
+      apply();
+    }
+    $('save').onclick = () => {
+      $('saveBox').hidden = !$('saveBox').hidden;
+      $('saveName').value = `${viewName(conds, show)} by ${groupBy.label.toLowerCase()}`;
+      if (!$('saveBox').hidden) $('saveName').select();
+    };
+    const saveView = () => {
+      const name = $('saveName').value.trim();
+      if (!name) return;
+      store.set(viewsKey(), [...views().filter((v) => v.name !== name), toView(name, conds, groupBy, { measure, display, max: maxDiv })]);
+      results.delete(name);
+      $('saveBox').hidden = true;
+      say(`Saved as "${name}". It is on the dashboard when you clear the filter.`);
+    };
+    $('saveOk').onclick = saveView;
+    $('saveName').onkeydown = (e) => { if (e.key === 'Enter') saveView(); if (e.key === 'Escape') $('saveBox').hidden = true; };
+
+    // ---------- run the filter ----------
+    // Every change to the conditions re-runs: count, show in StreamBIM, fetch quantities (up to AUTO_ROWS) and split.
+    let applyTimer;
+    function apply() { clearTimeout(applyTimer); applyTimer = setTimeout(run, 150); }
+    async function run() {
+      const my = ++seq;
+      let filter;
+      try { filter = buildFilter(conds, { buildingId }); } catch (e) { return say(e.message); }
+      if (!filter) return; // renderConds has cleared the view
+      say('Searching…');
+      try {
+        const total = await count(filter);
+        if (my !== seq) return;
+        state = { filter, total, objs: null, active: null };
+        renderKpis(null);
+        $('chartCard').hidden = true; // shown by render() when there is something to show
+        $('chartTitle').textContent = '';
+        $('groups').replaceChildren();
+        $('measure').hidden = true;
+        if (colored) { await api().colorCodeByProperty({}); colored = null; renderColor(); } // a new filter starts uncolored
+        await api().applyObjectSearch(filter);
+        await api().setSearchVisualizationMode(mode);
+        if (!total) return say('No objects match all conditions. Remove a condition or a value.');
+        if (total <= AUTO_ROWS) {
+          say('Fetching quantities…');
+          const objs = await fetchObjs(filter, AUTO_ROWS);
+          if (my !== seq) return;
+          state.objs = objs;
+        }
+        say('');
+        await split();
+      } catch (e) {
+        if (my === seq) say('Error: ' + err(e));
+      }
+    }
+
+    // What the filter is about: "walls" for one IFC type, otherwise "objects".
+    function subject() {
+      const c = conds.length === 1 && conds[0];
+      return c && c.field.key === '@kind' && c.op === '=' && c.values.length === 1 ? plural(c.values[0]) : 'Objects';
+    }
+    // KPI cards: the count first, then the totals of the quantities that exist.
+    function renderKpis(dims) {
+      const cols = MEASURES.filter((k) => dims?.[k]);
+      $('kpis').replaceChildren(
+        h('div', { className: 'kpi' }, h('span', { textContent: subject() }), h('b', { textContent: nf(state.total) })),
+        ...cols.map((k) => h('div', { className: 'kpi', title: `Source: ${dims[k].source || '–'}` },
+          h('span', { textContent: dims[k].label }), h('b', { textContent: `${n1(dims[k].total)} ${dims[k].unit}` }))));
+    }
+
+    async function clearView() {
+      ++seq;
+      state = null;
+      $('copyFallback').hidden = true;
+      $('saveBox').hidden = true;
+      if (colored) await api().colorCodeByProperty({});
+      await api().resetObjectSearch();
+      colored = null;
+      renderColor();
+      say('');
+    }
+
+    function setMode(m) {
+      mode = m;
+      $('fade').ariaPressed = String(m === 'FADED');
+      $('isolate').ariaPressed = String(m === 'HIDDEN');
+      if (state) api().setSearchVisualizationMode(m);
+    }
+    $('fade').onclick = () => setMode('FADED');
+    $('isolate').onclick = () => setMode('HIDDEN');
+    $('zoom').onclick = () => api().zoomToSearchResult();
+    $('clear').onclick = () => { conds = []; renderConds(); };
+
+    // ---------- picked object: filter on its values ----------
+    async function onPick({ guid }) {
+      let info;
+      try { info = await api().getObjectInfo(guid); } catch { return; }
+      const p = info.properties ?? {};
+      const typeName = info.groups?.find((g) => g.label === 'Type')?.content?.properties?.find((q) => q.key === 'Name')?.value;
+      const storey = info.groups?.find((g) => g.label === 'Location')?.content?.properties?.find((q) => q.key === 'Floor by position')?.value ?? p['@Building Storey']?.Name;
+      const quick = [
+        p['@kind'] && [FIELDS['@kind'], p['@kind'], `All ${plural(p['@kind']).toLowerCase()}`],
+        typeName && [FIELDS['Type Name'], typeName, `Type ${typeName}`],
+        storey && [FLOOR, storey, storey],
+      ].filter(Boolean);
+      const groups = (info.groups ?? []).filter((g) => !SKIP_GROUPS.has(g.label));
+      $('picked').hidden = false;
+      $('picked').replaceChildren(
+        h('div', { className: 'cond-h' }, h('span', { textContent: `Clicked: ${p.Name ?? guid}`, style: 'flex:1' }),
+          h('button', { className: 'x', textContent: '✕', ariaLabel: 'Close', onclick: () => ($('picked').hidden = true) })),
+        h('div', { className: 'chips', style: 'margin-top:4px' }, ...quick.map(([f, v, text]) =>
+          h('button', { className: 'pill', textContent: text, title: `Filter: ${f.label} = ${v}`, onclick: () => add(f, '=', v) }))),
+        h('details', {}, h('summary', { textContent: 'Filter on another value' }),
+          ...groups.map((g) => h('dl', {}, h('dt', { textContent: g.label, style: 'grid-column: 1 / -1; font-weight: 600; margin-top: 4px' }),
+            ...(g.content?.properties ?? []).filter((q) => q.value !== '').flatMap((q) => [
+              h('dt', { textContent: q.key }),
+              h('dd', {}, h('button', { className: 'link', textContent: q.value, title: 'Filter on this value', onclick: () => add(fieldOf(`${g.label}~${q.key}`), '=', q.value) })),
+            ])))),
+      );
+    }
+
+    // ---------- split ----------
+    const fieldNames = new Map(); // label in the list → key
+    function updateFieldList() {
+      fieldNames.clear();
+      for (const f of Object.values(FIELDS)) fieldNames.set(f.label, f.key);
+      for (const key of Object.keys(index.keys)) if (index.keys[key].values) fieldNames.set(labelOf(fieldOf(key)), key);
+      for (const c of conds) fieldNames.set(labelOf(c.field), c.field.key);
+      $('fields').replaceChildren(...[...fieldNames.keys()].map((v) => h('option', { value: v })));
+    }
+
+    // Group by: floor, IFC type, type name and the properties in the conditions, minus fields locked to one value,
+    // plus "Other…" for any property.
+    let groupFields = [];
+    function renderDims() {
+      groupBy = freeGroupBy(conds, groupBy);
+      const fixed = new Set(conds.filter((c) => c.op === '=' && c.values.length === 1).map((c) => c.field.key));
+      groupFields = [FLOOR, FIELDS['@kind'], FIELDS['Type Name'], ...conds.map((c) => c.field), groupBy]
+        .filter((f, i, all) => all.findIndex((g) => g.key === f.key) === i && (!fixed.has(f.key) || f.key === groupBy.key));
+      $('groupSel').replaceChildren(
+        ...groupFields.map((f, i) => h('option', { value: i, textContent: f.label, title: labelOf(f), selected: f.key === groupBy.key })),
+        h('option', { value: 'other', textContent: 'Other property…' }));
+    }
+    $('groupSel').onchange = () => {
+      const v = $('groupSel').value;
+      if (v !== 'other') return setGroupBy(groupFields[v]);
+      $('groupBy').hidden = false;
+      updateFieldList();
+      $('groupBy').focus();
+    };
+    function setGroupBy(f) {
+      groupBy = f;
+      $('groupBy').hidden = true;
+      $('groupBy').value = '';
+      if (state) split();
+    }
+    $('groupBy').onchange = () => {
+      const t = $('groupBy').value.trim();
+      const key = fieldNames.get(t) ?? (t.includes('~') ? t : null);
+      if (key) setGroupBy(fieldOf(key));
+      else say('Pick a property from the list.');
+    };
+    $('measureSel').onchange = () => { measure = $('measureSel').value; render(); };
+    $('maxSel').onchange = () => { maxDiv = Number($('maxSel').value); render(); };
+
+    async function split() {
+      const my = ++seq;
+      renderDims();
+      let res;
+      try { res = await analyze(state.filter, groupBy, state.total, state.objs); } catch (e) { return my === seq && say('Could not split: ' + err(e)); }
+      if (my !== seq) return;
+      Object.assign(state, res, { active: null, field: groupBy });
+      render();
+      if (colored && colored !== groupBy.key) applyColor(); // keep the model in step with the table
+    }
+
+    function render() {
+      const { groups, rest, dims, active, total, capped } = state;
+      const m = measureOf(dims, measure);
+      const cols = MEASURES.filter((k) => dims?.[k]);
+      renderKpis(dims);
+      $('chartCard').hidden = false;
+      $('chartTitle').textContent = `${subject()} by ${groupBy.label.toLowerCase()}`;
+      $('measureBox').hidden = !cols.length;
+      $('measureSel').replaceChildren(...['count', ...cols].map((k) => h('option', { value: k, textContent: k === 'count' ? 'Count' : `${dims[k].label} (${dims[k].unit})`, selected: k === m })));
+      // Max = divisions including Other. The donut has DONUT_SLOTS colors, so at most DONUT_SLOTS + 1 parts.
+      const maxes = display === 'donut' ? [3, 4, 5, 6, DONUT_SLOTS + 1] : MAXES;
+      const maxNow = display === 'donut' ? Math.min(maxDiv || DONUT_SLOTS + 1, DONUT_SLOTS + 1) : maxDiv;
+      $('maxBox').hidden = display === 'table';
+      $('maxSel').replaceChildren(...maxes.map((n) => h('option', { value: n, textContent: n || 'All', selected: n === maxNow })));
+      $('displays').replaceChildren(...DISPLAYS.map(([k, l, icon]) => {
+        const b = h('button', { className: 'ico', title: l, ariaLabel: l, ariaPressed: String(k === display), onclick: () => { display = k; render(); } });
+        b.innerHTML = icon;
+        return b;
+      }));
+      $('groups').replaceChildren(...[
+        chart({ field: groupBy, groups, dims, m, kind: display, max: maxDiv, rest, total: capped || total, active, onPick: showGroup }),
+        active && h('div', { className: 'active' },
+          h('span', { textContent: `Showing ${show(groupBy, active.label)} (${nf(active.n)} pcs)` }),
+          h('button', { textContent: 'Add to filter', onclick: () => add(groupBy, '=', active.label) }),
+          h('button', { textContent: 'Show all', onclick: () => showGroup(active) })),
+        capped && h('p', { className: 'warn', textContent: `Only the first ${nf(capped)} of ${nf(total)} objects are included.` }),
+        m !== 'count' && dims[m].missing.length > 0 && h('p', { className: 'warn', textContent: `${nf(dims[m].missing.length)} objects have no ${dims[m].label.toLowerCase()}.` }),
+      ].filter(Boolean));
+      const n = Math.min(total, MAX_MEASURE);
+      $('measure').hidden = !!state.objs;
+      $('measure').textContent = `Sum quantities for ${nf(n)} objects (~${Math.max(1, Math.round(n / 1300))} s)`;
+    }
+
+    async function showGroup(g) {
+      state.active = state.active === g ? null : g;
+      render();
+      await api().applyObjectSearch(state.active ? and(state.filter, g.cond) : state.filter);
+      await api().setSearchVisualizationMode(mode);
+    }
+
+    async function loadQuantities() {
+      if (state.objs) return;
+      const my = ++seq;
+      say('Fetching quantities…');
+      const objs = await fetchObjs(state.filter, MAX_MEASURE);
+      if (my !== seq) throw new Error('The filter changed.');
+      state.objs = objs;
+      say('');
+      await split();
+    }
+    $('measure').onclick = async () => {
+      $('measure').disabled = true;
+      try { await loadQuantities(); } catch (e) { say('Error: ' + err(e)); } finally { $('measure').disabled = false; }
+    };
+
+    // StreamBIM's own coloring by property: the objects in the current search get one color per value of the
+    // "Split by" property, and StreamBIM shows the legend (bottom left in the 3D view). Colors are StreamBIM's.
+    // Facts from StreamBIM's app code (see README):
+    // - colorCodeObjects with own colors per GUID only renders as the green search highlight, so it can't be used.
+    // - colorCodeByProperty needs a finished search (else StreamBIM adds a rule to the search) and calling it
+    //   again with the same property turns the coloring off. So: no new search here, and an explicit toggle.
+    // - colorCodeByProperty({}) removes the coloring and reloads the search; colorCodeObjects({}) does not remove it.
+    async function applyColor() {
+      const { psetName: pset, propKey: propertyKey } = groupBy.base;
+      await api().colorCodeByProperty({ pset, propertyKey });
+      colored = groupBy.key;
+      renderColor();
+      say(`Colored by ${labelOf(groupBy)}. The legend is at the bottom left of the 3D view.`);
+    }
+    async function removeColor() {
+      await api().colorCodeByProperty({}); // keeps the search
+      colored = null;
+      renderColor();
+      say('');
+    }
+    function renderColor() {
+      $('color').textContent = colored ? 'Remove colors' : 'Color in model';
+      $('color').ariaPressed = String(!!colored);
+    }
+    $('color').onclick = () => (colored ? removeColor() : state && applyColor()).catch((e) => say('Could not color: ' + err(e)));
+
+    // ---------- Excel ----------
+    // Summary: what was filtered and the table. Objects: one row per object with its quantities.
+    function summaryRows({ name, conds: cs, field, groups, dims, rest, total }) {
+      const cols = MEASURES.filter((k) => dims?.[k]);
+      const head = [field.label, 'Count', ...cols.map((k) => `${dims[k].label} (${dims[k].unit})`)];
+      const meta = [[name], ['Filter', viewName(cs, show)], ['Split by', labelOf(field)], ['Project', projectId], ['Exported', new Date().toLocaleString()], []];
+      const rows = sorted(groups, field, dims, 'count').map((g) => [show(field, g.label), g.n, ...cols.map((k) => round(dims[k].byGroup[g.label] ?? 0))]);
+      if (rest > 0) rows.push(['No value / other', rest]);
+      const sum = ['Total', total, ...cols.map((k) => round(dims[k].total))];
+      return { rows: [...meta, head, ...rows, sum], bold: [0, meta.length, meta.length + rows.length + 1] };
+    }
+    function objectRows(objs, field, dims) {
+      const cols = MEASURES.filter((k) => dims?.[k]);
+      const extra = [FLOOR.key, 'Type Name', '@kind', 'Name'].includes(field.key) ? null : field;
+      const head = ['GUID', 'Name', 'IFC type', 'Type name', 'Floor', ...(extra ? [labelOf(extra)] : []), ...cols.map((k) => `${dims[k].label} (${dims[k].unit})`)];
+      return { rows: [head, ...objs.map((o) => [o.guid, o.p.Name ?? '', o.p['@kind'] ?? '', o.p['Type Name'] ?? '', o.floor,
+        ...(extra ? [o.p[extra.key] ?? ''] : []), ...cols.map((k) => (dims[k].byObject[o.guid] != null ? round(dims[k].byObject[o.guid]) : ''))])] };
+    }
+    function download(bytes, name) {
+      const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      const a = h('a', { href: url, download: `${name.replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 120) || 'export'}.xlsx` });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60e3);
+      say(`Downloaded ${a.download}. If nothing was saved, use Copy table.`);
+    }
+
+    $('export').onclick = async () => {
+      if (!state?.groups) return;
+      $('export').disabled = true;
+      try {
+        if (!state.objs && state.total <= MAX_MEASURE) await loadQuantities(); // the export always has every object
+        const name = viewName(conds, show) || 'Export';
+        const sheets = [{ name: 'Summary', ...summaryRows({ name, conds, field: groupBy, ...state, total: state.capped || state.total }) }];
+        if (state.objs) sheets.push({ name: 'Objects', ...objectRows(state.objs, groupBy, state.dims) });
+        download(xlsx(sheets), name);
+      } catch (e) { say('Could not export: ' + err(e)); } finally { $('export').disabled = false; }
+    };
+
+    // Every view on the dashboard, one sheet each, as they are in the model now.
+    $('dashExport').onclick = async () => {
+      const list = views();
+      const sheets = [];
+      for (const [i, v] of list.entries()) {
+        say(`Preparing ${i + 1}/${list.length}: ${v.name}…`);
+        try {
+          const r = results.get(v.name) ?? await computeView(v);
+          results.set(v.name, r);
+          sheets.push({ name: v.name, ...summaryRows({ name: v.name, conds: r.conds, field: r.field, groups: r.groups, dims: r.dims, rest: r.rest, total: r.capped || r.total }) });
+        } catch (e) { sheets.push({ name: v.name, rows: [[v.name], ['Could not compute: ' + err(e)]] }); }
+      }
+      if (sheets.length) download(xlsx(sheets), `Dashboard ${projectId} ${new Date().toISOString().slice(0, 10)}`);
+    };
+
+    $('copy').onclick = async () => {
+      if (!state?.groups) return;
+      const dims = state.dims ?? { count: { label: 'Count', unit: 'pcs', total: state.total - state.rest, byGroup: Object.fromEntries(state.groups.map((g) => [g.label, g.n])) } };
+      const tsv = toTSV({ groups: sorted(state.groups, groupBy, state.dims, 'count').map((g) => g.label), dims }, labelOf(groupBy));
+      try {
+        await navigator.clipboard.writeText(tsv);
+        say('Copied – paste into Excel.');
+      } catch {
+        const t = $('copyFallback');
+        t.value = tsv;
+        t.hidden = false;
+        t.select();
+        say('Press Ctrl+C and paste into Excel.');
+      }
+    };
+
+    // ---------- start ----------
+    if (window.parent === window) {
+      say('Not embedded in StreamBIM. Open it from a StreamBIM project where the widget is enabled.');
+    } else {
+      StreamBIM.connectToParent(window.parent, { pickedObject: onPick })
+        .then(async () => {
+          [buildingId, floors, projectId] = await Promise.all([api().getBuildingId(), api().getFloors().catch(() => []), api().getProjectId().catch(() => '')]);
+          floors = [...floors].sort((a, b) => a.height - b.height);
+          kinds = Object.keys(await api().valuesForObjectProperty('@kind').catch(() => ({})));
+          say('');
+          renderConds();
+          $('q').focus();
+          buildIndex().catch((e) => showIndexStatus('Could not load values: ' + err(e)));
+        })
+        .catch((e) => say('Could not connect: ' + err(e)));
+    }
+  </script>
 </body>
 </html>
