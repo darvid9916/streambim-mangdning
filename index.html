@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>Mängdning – StreamBIM</title>
-  <link rel="stylesheet" href="styles.css?v=20261127d">
+  <link rel="stylesheet" href="styles.css?v=20261127e">
 </head>
 <body>
   <main id="app">
@@ -14,7 +14,7 @@
         <h1>Mängdning</h1>
         <p id="who" class="muted">Ansluter till StreamBIM…</p>
       </div>
-      <span id="ver" class="muted small">v20261127d</span>
+      <span id="ver" class="muted small">v20261127e</span>
       <span id="mockBadge" class="badge" hidden>DEMO</span>
     </header>
 
@@ -27,7 +27,7 @@
     </section>
 
     <section class="card" id="classCard" hidden>
-      <div class="cardhead"><strong>2. Objekttyp</strong><button id="clearClassesBtn" class="link">Alla</button></div>
+      <div class="cardhead"><strong>2. Objekttyp</strong><button id="clearClassesBtn" class="link">Rensa</button></div>
       <div id="classChips" class="chips"></div>
     </section>
 
@@ -35,6 +35,7 @@
       <div class="cardhead"><strong>3. Parametrar <span class="muted small">(alla måste stämma)</span></strong><button id="clearFiltersBtn" class="link">Rensa filter</button></div>
       <div id="filters" class="filters"></div>
       <button id="addFilterBtn" class="ghost wide">+ Lägg till filter</button>
+      <p id="filterNote" class="muted small"></p>
     </section>
 
     <section class="card" id="optCard" hidden>
@@ -53,9 +54,15 @@
         <span id="pickedTxt"></span> <button id="clearPickedBtn" class="link">Rensa markering</button>
       </p>
       <div class="row buttons">
-        <button id="reloadBtn" class="ghost">Läs in modellen igen</button>
         <button id="resetViewBtn" class="ghost">Återställ vy</button>
       </div>
+    </section>
+
+    <p id="hintTxt" class="muted">Välj disciplin och objekttyp för att börja.</p>
+
+    <section class="card" id="bigCard" hidden>
+      <p id="bigTxt" class="small" style="margin:0"></p>
+      <button id="loadAllBtn" class="ghost wide">Läs in alla</button>
     </section>
 
     <section class="card" id="resultCard" hidden>
@@ -80,9 +87,9 @@
     <p id="error" class="error" hidden></p>
   </main>
 
-  <script src="lib/streambim-widget-api.min.js?v=20261127d"></script>
-  <script src="lib/xlsx.full.min.js?v=20261127d"></script>
-  <script src="mock.js?v=20261127d"></script>
-  <script src="app.js?v=20261127d"></script>
+  <script src="lib/streambim-widget-api.min.js?v=20261127e"></script>
+  <script src="lib/xlsx.full.min.js?v=20261127e"></script>
+  <script src="mock.js?v=20261127e"></script>
+  <script src="app.js?v=20261127e"></script>
 </body>
 </html>

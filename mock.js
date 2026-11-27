@@ -9,7 +9,7 @@
   function add(kind, name, type, material, floor, zone, layer, qto) {
     n++;
     const p = {
-      '@kind': ['Ifc' + kind], '@layer': [layer], 'Name': [name], 'GUID': ['MOCK-' + n], 'Type': [type], 'Material': [material],
+      '@kind': [kind], '@layer': [layer], 'Name': [name], 'GUID': ['MOCK-' + n], 'Type': [type], 'Material': [material],
       'Building Storey': [floor], 'Platsdata~Zon': [zone], 'Platsdata~Byggdel': [type.split(' ')[0]]
     };
     Object.entries(qto || {}).forEach(([k, v]) => { p[k] = [v]; });
@@ -33,6 +33,16 @@
         { 'BaseQuantities~Length': 3.35, 'BaseQuantities~NetVolume': +(0.16 * 3.35).toFixed(3) });
   }));
 
+  // Stora klasser som i Test 1: 4 000 balkar och 500 kabelstegar
+  for (let i = 0; i < 4000; i++) {
+    const f = floors[i % 3], z = zones[(i >> 1) % 2], prof = ['HEA200', 'HEA240', 'IPE300', 'KKR150x150x8'][i % 4];
+    add('Beam', 'Balk ' + (i + 1), prof, 'Stål S355', f, z, 'K-modell', { 'BaseQuantities~Length': 4 + (i % 5), 'BaseQuantities~NetVolume': +(0.006 * (4 + (i % 5))).toFixed(4) });
+  }
+  for (let i = 0; i < 500; i++) {
+    const f = floors[i % 3], z = zones[i % 2];
+    add('Cable carrier segment', 'Kabelstege ' + (i + 1), i % 2 ? 'KS 300' : 'KS 500', 'Stål', f, z, 'E-modell', { 'BaseQuantities~Length': 3 });
+  }
+  const byGuid = {}; objs.forEach(o => { byGuid[o.guid] = o; });
   const key = r => r.psetName ? r.psetName + '~' + r.propKey : r.propKey;
   const val = (o, k) => (o.properties[k] || [])[0];
   // Efterliknar ett strängare API: @kind kräver formatet IfcXxx och operator '='
@@ -55,13 +65,14 @@
         getProjectId: async () => '5364',
         getBuildingId: async () => '1000',
         valuesForObjectProperty: async (p) => { const o = {}; objs.forEach(x => { const v = val(x, p); if (v !== undefined) o[v] = (o[v] || 0) + 1; }); return o; },
-        getObjectInfoForSearch: async (q) => {
+        getObjectInfoForSearch: async (q) => { throw { code: 'unknown', debug: null }; },
+        _unused: async (q) => {
           const all = objs.filter(o => match(o, q)), pg = q.page || { limit: 1000, skip: 0 };
           await new Promise(r => setTimeout(r, 60));
           return { data: all.slice(pg.skip, pg.skip + pg.limit) };
         },
-        findObjects: async (q) => objs.filter(o => String(val(o, q.key)) === String(q.value)).slice(0, q.limit || 100).map(o => o.guid),
-        getObjectInfo: async (g) => objs.find(o => o.guid === g),
+        findObjects: async (q) => { await new Promise(r => setTimeout(r, 30)); return objs.filter(o => String(val(o, q.key)) === String(q.value)).slice(0, q.limit || 100).map(o => o.guid); },
+        getObjectInfo: async (g) => { await new Promise(r => setTimeout(r, 2)); return byGuid[g]; },
         quickSearch: async (t) => ({ hits: [] }),
         makeApiRequest: async () => '{"searchId":"mock"}',
         getLayers: async () => ({ 'A-modell': true, 'K-modell': true }),

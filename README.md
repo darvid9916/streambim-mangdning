@@ -5,15 +5,18 @@ Widgeten **läser bara**. Den ändrar aldrig modell, projekt eller egenskaper. D
 
 ## Så fungerar den
 
-När widgeten öppnas läser den in objekten i modellen en gång. Därefter sker allt i steg, och varje steg visar bara det som finns kvar efter de tidigare valen, med antal:
-
-1. **Disciplin.** Hämtas i första hand från den egenskap vars värden matchar StreamBIMs lagernamn. Andra hand är en känd disciplinegenskap (`discipline.keys` i settings). Sist uppskattas den från IFC-klassen. Vilket sätt som användes står under knapparna. Att välja en disciplin som kommer från lager tänder och släcker också lagren i 3D.
-2. **Objekttyp.** Bara de IFC-klasser som finns i vald disciplin.
-3. **Parametrar.** Bara parametrar och värden som finns i urvalet efter steg 1 och 2 och efter filtren ovanför. Filtren kombineras med OCH.
+1. **Disciplin** och **2. Objekttyp** visas direkt, med antal, från StreamBIMs räkning per IFC-klass (`valuesForObjectProperty('@kind')`). Inget läses in i det här läget. Disciplin bestäms av IFC-klassen enligt `discipline.byClass` i settings.
+3. **Parametrar.** När en objekttyp är vald hämtas dess GUID:er med `findObjects` och egenskaperna objekt för objekt med `getObjectInfo`.
+   - Har urvalet högst `autoLoad` objekt (3 000) läses allt in direkt. Parametrar och värden kommer då från urvalet, med antal, och varje filter visar bara det som finns kvar efter filtren ovanför.
+   - Har urvalet fler objekt kommer parametrarna från ett stickprov och värdena från hela modellen. När du väljer ett värde snävas urvalet in på servern med `findObjects`, och när det är litet nog läses det in. Med knappen "Läs in alla" läses hela urvalet in (högst `maxLoad`, 30 000).
 
 Resultatet uppdateras direkt: antal (st), längd (m), area (m²) och volym (m³) från `BaseQuantities` och `Qto_*`, grupperat på IFC-klass, disciplin eller valfri parameter.
 En rad i tabellen visar objekten i 3D. "Markera" färgar dem och "Isolera" döljer allt annat.
-"Exportera till Excel" skapar `Test_1_Sweco_mängdning_ÅÅÅÅ-MM-DD.xlsx` med två flikar: en sammanställning med valen överst och en objektlista.
+"Exportera till Excel" skapar `Test_1_Sweco_mängdning_ÅÅÅÅ-MM-DD.xlsx` med en sammanställning och en objektlista.
+
+### Verifierat mot Test 1, Sweco (27 nov)
+- `@kind`-värden är skrivna som `Wall` och `Cable carrier segment`. Widgeten visar dem som `IfcWall` och `IfcCableCarrierSegment`.
+- `getObjectInfoForSearch` med `filter.rules` ger felet `unknown`. `findObjects({ key: '@kind', value })` fungerar.
 
 ## Testa lokalt
 
@@ -31,11 +34,8 @@ python3 -m http.server 8000
 
 | # | Antagande | Om det är fel |
 |---|---|---|
-| 1 | `getObjectInfoForSearch` hittar objekt med en regel på `@kind`. Widgeten provar fyra värdeformat (`Wall`, `IfcWall`, `IFCWALL`, rått värde), med och utan `operator: '='`, och buildingId som text och som tal. | Felmeddelande om att ingen söksyntax hittades. Skicka felsökningsrutan. |
-| 2 | Sökningen stöder `page.limit` och `page.skip`. | Bara de första 500 objekten per klass läses in. |
-| 3 | Kvantiteter finns i `BaseQuantities`/`Qto_*`, i meter, m² och m³. | Varning om saknade kvantiteter. Ändra `quantities.scale` om värdena är 1 000 gånger för stora. |
-| 4 | Lagren i `getLayers()` motsvarar discipliner eller delmodeller och finns som en egenskap på objekten. | Disciplin tas från en egenskap eller från IFC-klass i stället, vilket står i widgeten. |
+| 1 | `findObjects` fungerar även för andra egenskaper än `@kind`, med samma nyckel som i objektets `properties` (t.ex. `Platsdata~Zon`). Används bara för stora urval. | Filtret ger 0 objekt. Använd "Läs in alla" eller välj en mindre objekttyp först. |
+| 2 | `getObjectInfo` klarar ca 40 parallella anrop. | Inläsningen går långsamt eller fastnar. Sänk `search.batch`. |
+| 3 | Kvantiteter finns i `BaseQuantities`/`Qto_*`, i meter, m² och m³. | Varning om saknade kvantiteter. Justera `quantities.scale`. |
+| 4 | `applyObjectSearch({ key, value })` fungerar för "Isolera". | Gruppen visas bara i färg. |
 | 5 | Widgetrutan tillåter nedladdning. | Inget händer vid export. Det måste StreamBIM ändra. |
-| 6 | Projektnamnet tas från `projectNames` i settings, eftersom API:t bara ger ett id. | Filnamnet blir `projekt-<id>_…`. |
-
-Max 20 000 objekt läses in (`search.maxObjects`).
