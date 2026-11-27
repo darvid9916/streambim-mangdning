@@ -1,0 +1,43 @@
+{
+  "_info": "Inställningar för mängdningswidgeten. Widgeten läser bara, den skriver aldrig till modell eller projekt.",
+  "projectNames": { "5364": "Test 1, Sweco" },
+  "classes": [
+    { "kind": "Wall", "label": "IfcWall" },
+    { "kind": "CurtainWall", "label": "IfcCurtainWall" },
+    { "kind": "Door", "label": "IfcDoor" },
+    { "kind": "Window", "label": "IfcWindow" },
+    { "kind": "Slab", "label": "IfcSlab" },
+    { "kind": "Roof", "label": "IfcRoof" },
+    { "kind": "Beam", "label": "IfcBeam" },
+    { "kind": "Column", "label": "IfcColumn" },
+    { "kind": "Covering", "label": "IfcCovering" },
+    { "kind": "Stair", "label": "IfcStair" },
+    { "kind": "Railing", "label": "IfcRailing" },
+    { "kind": "Space", "label": "IfcSpace" }
+  ],
+  "search": {
+    "kindKey": "@kind",
+    "equalsOperator": null,
+    "pageSize": 500,
+    "maxObjects": 20000,
+    "sampleSize": 200
+  },
+  "quantities": {
+    "psetPattern": "^(BaseQuantities|Qto_.*)$",
+    "default": {
+      "length": ["Length", "NetLength", "GrossLength"],
+      "area": ["NetSideArea", "NetArea", "NetFootprintArea", "GrossSideArea", "GrossArea", "GrossFootprintArea", "Area"],
+      "volume": ["NetVolume", "GrossVolume", "Volume"]
+    },
+    "byClass": {
+      "Slab": { "area": ["NetArea", "GrossArea"] },
+      "Door": { "area": ["Area"] },
+      "Window": { "area": ["Area"] },
+      "Space": { "area": ["NetFloorArea", "GrossFloorArea"] }
+    },
+    "scale": { "length": 1, "area": 1, "volume": 1 }
+  },
+  "layerPropertyCandidates": ["@layer", "Layer", "Model", "File Name", "Filename"],
+  "hiddenPropertyPrefixes": ["@", "BaseQuantities~", "Qto_"],
+  "highlightColor": "2f8fdd"
+}
